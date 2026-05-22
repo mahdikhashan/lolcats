@@ -1,0 +1,35 @@
+name: llama-1b
+# Base model config — Llama 3.2 1B with LoLCATs hedgehog + sliding window
+model:
+  pretrained_model_name_or_path: "meta-llama/Llama-3.2-1B"
+  cache_dir: "/checkpoints/"   # CHANGE this
+  return_dict: true
+  quantization: false
+  device_map: auto
+  low_cpu_mem_usage: true
+  torch_dtype: bfloat16
+  rope_theta: 500000.0                      # Llama 3.2 uses 500K theta (NOT 10000 like Mistral)
+  attn_implementation: flash_attention_2
+
+# Attention swap config — this defines what linear attention we use
+attention:
+  attention_type: lolcats_llama_window_tk   # The lolcats linear + sliding window variant
+
+  # Hedgehog feature map (matches your Lizard setup conceptually)
+  feature_map: "softmax_dim"
+  feature_dim: 128                            # Per-head feature dim (your Lizard used 128, LoLCATs default is 64)
+  learned_kernel: "untied_head_einsum"       # The learnable hedgehog projection
+  tie_qk_kernels: false
+  rotary_config: null                        # Llama 3.2 RoPE handled by the wrapper
+
+  # Sliding window (AWA equivalent)
+  window_size: 128                            # LoLCATs default; bump to 128 to match your Lizard
+  affine_attention_factors: false
+  init_window_factor: -2.1972245773362196   # Init: sigmoid(this) ≈ 0.1, so window contribution starts small
+
+  # Which layers stay softmax (none — fully linearize)
+  softmax_attentions: []
+
+  # Train all attention layers
+  train_attention: true
+  remove_base_attn: true                    # Free original softmax weights after distill
