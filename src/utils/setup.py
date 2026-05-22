@@ -20,9 +20,9 @@ def init_wandb(args: ArgumentParser) -> any:
     else:
         import wandb
         wandb.init(config={},
-                   entity=args.wandb_entity,
+                   entity="mahdikhashan1",
                    name=args.run_name,
-                   project=args.project_name)
+                   project="lolcats-personal")
     return wandb
 
 
