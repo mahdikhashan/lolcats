@@ -8,7 +8,7 @@ dataset:
     cache_dir: "data/alpaca"
   pretrained_model_config:
     pretrained_model_name_or_path: "meta-llama/Meta-Llama-3-1B" # will be updated based on model_config
-    cache_dir: "/checkpoints/"
+    cache_dir: "/scratch/"
   preprocess_config: null
 
 dataloader:
