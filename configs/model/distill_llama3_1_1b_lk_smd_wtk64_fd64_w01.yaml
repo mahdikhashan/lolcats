@@ -30,6 +30,12 @@ attention:
   # Which layers stay softmax (none — fully linearize)
   softmax_attentions: []
 
+  learned_kernel_kwargs:
+    feature_dim: 128
+    skip_connection: false
+    bias: false
+    zero_init: false
+
   # Train all attention layers
   train_attention: true
   remove_base_attn: true                    # Free original softmax weights after distill
