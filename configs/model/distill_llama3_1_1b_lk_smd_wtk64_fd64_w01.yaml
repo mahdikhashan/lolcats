@@ -16,6 +16,10 @@ attention:
 
   # Hedgehog feature map (matches your Lizard setup conceptually)
   feature_map: "softmax_dim"
+  feature_map_kwargs:
+    eps: 1e-12
+    # mlp: null  # to set
+    fullspace: true
   feature_dim: 128                            # Per-head feature dim (your Lizard used 128, LoLCATs default is 64)
   learned_kernel: "untied_head_einsum"       # The learnable hedgehog projection
   tie_qk_kernels: false
