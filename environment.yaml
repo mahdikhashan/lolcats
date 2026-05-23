@@ -5,7 +5,7 @@ channels:
   - huggingface
   - nvidia
 dependencies:
-  - python>=3.10
+  - python=3.11
   - pip
   - pytorch
   - pytorch-cuda=12.1 # change depending on your supported CUDA version
