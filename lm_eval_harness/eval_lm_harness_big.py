@@ -40,7 +40,7 @@ from llama_recipes.trainer_finetune import print_model_size
 # from lm_eval_harness.model_loader import load_model_from_checkpoint, load_model_from_config
 from src.model.load_model_for_eval import load_model_from_checkpoint, load_model_from_config
 
-LM_EVALUATION_HARNESS_PATH = '/home/mzhang/projects/lm-evaluation-harness'
+LM_EVALUATION_HARNESS_PATH = '/workspace/lm-evaluation-harness'
 
 
 OPEN_LLM = [  # task, shots

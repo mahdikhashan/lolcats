@@ -13,9 +13,9 @@ import pandas as pd
 
 from src.model.load_model_for_eval import load_model_from_checkpoint, load_model_from_config
 
-LM_EVALUATION_HARNESS_PATH = '/juice2/scr2/mzhang/projects/lm-evaluation-harness'  # Change this to where you clone LM eval harness from
+LM_EVALUATION_HARNESS_PATH = '/workspace/lm-evaluation-harness'  # Change this to where you clone LM eval harness from
 
-RESULTS_PATH = '/scr-ssd/mzhang/projects/lolcats/lm_eval_harness/results_lm_eval.csv'
+RESULTS_PATH = '/workspace/results/results_lm_eval.csv'
 
 
 OPEN_LLM = [  # task, shots
