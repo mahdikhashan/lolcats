@@ -84,16 +84,30 @@ def get_lm_eval_model(model_kwargs: dict,  # model_loader.loading_kwargs
     Load model for evaluation using LM Evaluation Harness
     """
     lm_kwargs = copy.deepcopy(model_kwargs)
-    # lm_kwargs['pretrained'] = lm_kwargs['pretrained_model_name_or_path']
     lm_kwargs['pretrained'] = lm_kwargs.pop('pretrained_model_name_or_path')
     lm_kwargs['dtype'] = str(lm_kwargs['torch_dtype']).split('.')[-1]
     del lm_kwargs['torch_dtype']
-    del lm_kwargs['cache_dir']
-    del lm_kwargs['return_dict']
 
-    # lm_kwargs['use_cache'] = False
     lm_kwargs['output_attentions'] = False
     lm_kwargs['output_hidden_states'] = False
+
+    # === Filter to only kwargs accepted by HuggingFaceAutoLM.__init__ ===
+    # The model config YAML carries many transformers-specific keys
+    # (cache_dir, return_dict, device_map, low_cpu_mem_usage, rope_theta,
+    # attn_implementation, quantization) that the lm-eval-harness wrapper
+    # doesn't accept. Drop them here in one pass instead of one-by-one.
+    sys.path.append(path_to_lm_eval_harness)
+    import inspect
+    try:
+        from lm_eval.models.huggingface import HuggingFaceAutoLM
+    except ImportError:
+        from lm_eval.base import HuggingFaceAutoLM
+    _allowed = set(inspect.signature(HuggingFaceAutoLM.__init__).parameters.keys())
+    _dropped = sorted(set(lm_kwargs.keys()) - _allowed)
+    lm_kwargs = {k: v for k, v in lm_kwargs.items() if k in _allowed}
+    if _dropped:
+        print(f'   filtered out unsupported lm-eval kwargs: {_dropped}')
+    # === End filter ===
 
     print('-> Loading as lm-evaluation-harness model')
     if hedgehog_model:
@@ -103,7 +117,6 @@ def get_lm_eval_model(model_kwargs: dict,  # model_loader.loading_kwargs
             from lm_eval_harness.models import LolcatsLlamaForCausalLM as ModelClass
         lm = ModelClass.create_from_arg_string('', lm_kwargs)
     else:
-        sys.path.append(path_to_lm_eval_harness)
         from lm_eval.models import get_model
         lm = get_model('hf-causal-experimental').create_from_arg_string('', lm_kwargs)
     return lm
