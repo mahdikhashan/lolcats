@@ -88,6 +88,7 @@ def get_lm_eval_model(model_kwargs: dict,  # model_loader.loading_kwargs
     lm_kwargs['pretrained'] = lm_kwargs.pop('pretrained_model_name_or_path')
     lm_kwargs['dtype'] = str(lm_kwargs['torch_dtype']).split('.')[-1]
     del lm_kwargs['torch_dtype']
+    del lm_kwargs['cache_dir']
 
     # lm_kwargs['use_cache'] = False
     lm_kwargs['output_attentions'] = False
