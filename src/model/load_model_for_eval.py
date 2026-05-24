@@ -84,7 +84,8 @@ def get_lm_eval_model(model_kwargs: dict,  # model_loader.loading_kwargs
     Load model for evaluation using LM Evaluation Harness
     """
     lm_kwargs = copy.deepcopy(model_kwargs)
-    lm_kwargs['pretrained'] = lm_kwargs['pretrained_model_name_or_path']
+    # lm_kwargs['pretrained'] = lm_kwargs['pretrained_model_name_or_path']
+    lm_kwargs['pretrained'] = lm_kwargs.pop('pretrained_model_name_or_path')
     lm_kwargs['dtype'] = str(lm_kwargs['torch_dtype']).split('.')[-1]
     del lm_kwargs['torch_dtype']
 
