@@ -7,6 +7,7 @@
 # Docker + Hugging Face Jobs:
 # -> make docker-build docker-push IMAGE=<dockerhub-user>/lolcats
 # -> make hf-job IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo> [TARGET=lizard] [HF_FLAVOR=h200]
+# -> make hf-job-finetune IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo>  # Lizard finetune only, from the distill checkpoint in HF_REPO (H200)
 
 PYTHON ?= python
 
@@ -21,18 +22,21 @@ TARGET     ?= lizard
 HF_FLAVOR  ?= a100-large
 HF_TIMEOUT ?= 12h
 HF_REPO    ?=
+# Lizard distill checkpoint in HF_REPO, at the path `make lizard` pushes it to
+DISTILL_CKPT ?= checkpoints/distill_llama3_2_1b_lizard_w128_fd128_m4/dl-d=$(DISTILL_CONFIG)-m=distill_llama3_2_1b_lizard_w128_fd128_m4-f=$(FINETUNE_CONFIG)-s=$(SEED)-se=$(SEED)-re=$(REPLICATE)_distill.pt
 
 TRAIN_ARGS = --distill_config $(DISTILL_CONFIG) \
 	--finetune_config $(FINETUNE_CONFIG) \
 	--no_init_eval --verbose --seed $(SEED) --replicate $(REPLICATE) $(ARGS)
 
-.PHONY: help lolcats lizard docker-build docker-push hf-job
+.PHONY: help lolcats lizard docker-build docker-push hf-job hf-job-finetune
 
 help:
 	@echo "make lolcats   # distill + finetune with LoLCATs attention"
 	@echo "make lizard    # distill + finetune with Lizard attention"
 	@echo "make docker-build docker-push IMAGE=<dockerhub-user>/lolcats"
 	@echo "make hf-job IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo>"
+	@echo "make hf-job-finetune IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo>"
 
 lolcats:
 	$(PYTHON) distill_llama.py --model_config distill_llama3_1_1b_lk_smd_wtk64_fd64_w01 \
@@ -54,3 +58,15 @@ hf-job:
 	hf jobs run --flavor $(HF_FLAVOR) --timeout $(HF_TIMEOUT) --detach \
 	--secrets HF_TOKEN $(if $(WANDB_API_KEY),--secrets WANDB_API_KEY) --env HF_REPO=$(HF_REPO) \
 	$(IMAGE) make $(TARGET) ARGS="$(if $(WANDB_API_KEY),,--no_wandb) $(ARGS)"
+
+# Skip distillation: download the distill checkpoint from HF_REPO, then finetune from it with `make lizard`
+FINETUNE_JOB = huggingface-cli download $$HF_REPO "$(DISTILL_CKPT)" --local-dir . && \
+	make lizard DISTILL_CONFIG=$(DISTILL_CONFIG) FINETUNE_CONFIG=$(FINETUNE_CONFIG) SEED=$(SEED) REPLICATE=$(REPLICATE) \
+	ARGS="--load_distill_checkpoint default $(if $(WANDB_API_KEY),,--no_wandb) $(ARGS)"
+
+hf-job-finetune: HF_FLAVOR = h200
+hf-job-finetune:
+	@test -n "$(HF_REPO)" || (echo "Set HF_REPO=<hf-user>/<repo>, the repo with the distill checkpoint"; exit 1)
+	hf jobs run --flavor $(HF_FLAVOR) --timeout $(HF_TIMEOUT) --detach \
+	--secrets HF_TOKEN $(if $(WANDB_API_KEY),--secrets WANDB_API_KEY) --env HF_REPO=$(HF_REPO) \
+	$(IMAGE) bash -c '$(FINETUNE_JOB)'
