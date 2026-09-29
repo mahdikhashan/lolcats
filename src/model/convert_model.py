@@ -98,6 +98,7 @@ def get_attention(attention_type: str, **kwargs: any):
     Get the linear attention class; either purely linear or linear with sliding window
     -> 'linear' == 'lolcats_llama'
     -> 'linear and sliding_window' == 'lolcats_llama_window_*'
+    -> 'gated linear and sliding window with sinks' == 'lolcats_llama_lizard'
     """
     kwargs['attention_type'] = attention_type
 
@@ -116,6 +117,10 @@ def get_attention(attention_type: str, **kwargs: any):
     elif attention_type == 'lolcats_llama_window_sw_linear':
         from .linear_attention.linear_window_attention_sw_linear import LolcatsLinearSlidingWindowAttention
         return partial(LolcatsLinearSlidingWindowAttention, **kwargs)
+
+    elif attention_type == 'lolcats_llama_lizard':
+        from .linear_attention import LolcatsLizardAttention
+        return partial(LolcatsLizardAttention, **kwargs)
 
     ## Experimental chunked linear attentions below
     elif attention_type == 'lolcats_long_llama_window_tk':
@@ -159,6 +164,10 @@ def get_attention_cache(attention_type: str, past_key_values: any = None):
     elif 'llama_window_sw_linear' in attention_type:
         from .linear_attention import LinearAttentionSlidingWindowCache
         return LinearAttentionSlidingWindowCache()
+
+    elif 'llama_lizard' in attention_type:
+        from .linear_attention import LizardAttentionCache
+        return LizardAttentionCache()
 
     ## TK generation build (requires Thunderkittens)
     elif attention_type == 'lolcats_llama_window_tk_gen':
