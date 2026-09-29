@@ -19,8 +19,7 @@ def init_wandb(args: ArgumentParser) -> any:
         wandb = None
     else:
         import wandb
-        wandb.init(config={},
-                   entity="mahdikhashan1",
+        wandb.init(config={},  # entity: the API key's default team (or $WANDB_ENTITY)
                    name=args.run_name,
                    project="lolcats-personal")
     return wandb
