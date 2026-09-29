@@ -42,8 +42,9 @@ lizard:
 	$(PYTHON) distill_llama.py --model_config distill_llama3_2_1b_lizard_w128_fd128_m4 \
 	$(TRAIN_ARGS)
 
+# HF Jobs run on x86-64, so build for it even on Apple silicon
 docker-build:
-	docker build -t $(IMAGE) .
+	docker build --platform linux/amd64 -t $(IMAGE) .
 
 docker-push:
 	docker push $(IMAGE)
