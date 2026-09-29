@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
+from src.utils.hub import push_to_hub
 from .optim import get_optimizer, get_scheduler
 from .utils import decode_samples
 
@@ -248,6 +249,7 @@ class OurTrainer():
                         self.eval_metrics_by_step[k].append(v)
                 # Inefficient, but log for experiments results
                 pd.DataFrame(self.eval_metrics_by_step).to_csv(self.results_path)
+                push_to_hub(self.results_path)
 
             # Save best metric and checkpoint
             if self.grad_step % self.eval_steps == 0:
@@ -261,6 +263,7 @@ class OurTrainer():
                         self.metric_for_best_model: val_metric
                     }, self.best_val_checkpoint_path)
                     print(f'\n-> Saved best model checkpoint to: {self.best_val_checkpoint_path}!')
+                    push_to_hub(self.best_val_checkpoint_path)
 
             if self.grad_step % self.num_save_ckpt_steps == 0:
                 save_path = self.best_val_checkpoint_path.replace('.pt', f'_{self.grad_step}.pt')
@@ -270,6 +273,7 @@ class OurTrainer():
                     self.metric_for_best_model: val_metric
                 }, save_path)
                 print(f'\n-> Saved best model checkpoint to: {save_path}!')
+                push_to_hub(save_path)
             
             if self.scheduler_step_after_epoch and self.scheduler is not None:
                 self.scheduler.step(val_metric)
