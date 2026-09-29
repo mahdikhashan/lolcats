@@ -362,8 +362,9 @@ def main():
                 setattr(args, arg, argv)
         finetune_trainer = get_evaluator(model, eval_config, args, args.device, wandb)
 
-    # Final eval
-    if 'save10' not in args.distill_config and 'save10' not in args.finetune_config:
+    # Final eval (skipped without --eval_config)
+    if (args.eval_config is not None and
+        'save10' not in args.distill_config and 'save10' not in args.finetune_config):
         print_header('*** Distilled + Finetuned Final Eval ***')
         final_metrics = finetune_trainer.evaluate(model, step=-1, max_batches=None, prefix='final')  
         print_header('*** Saved Checkpoints ***')

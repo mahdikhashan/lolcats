@@ -7,7 +7,7 @@ channels:
 dependencies:
   - python=3.11
   - pip
-  - pytorch
+  - pytorch::pytorch=2.5.1 # CUDA build (unpinned, conda-forge's CPU-only pytorch gets picked)
   - pytorch-cuda=12.4 # change depending on your supported CUDA version
   - transformers=4.43.1 # Llama 3.1 support (updated RoPE)
   - peft=0.9.0
@@ -26,3 +26,6 @@ dependencies:
   - rich
   - tqdm
   - wandb
+  - pip:
+    # FlashAttention 2 prebuilt for torch 2.5 + CUDA 12 + Python 3.11 (building it from source takes hours)
+    - https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.5cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
