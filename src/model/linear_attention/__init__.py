@@ -10,6 +10,9 @@ from .linear_window_attention_tk import (
 from .linear_window_attention_sw import (
     LolcatsSlidingWindowAttention, LinearAttentionSlidingWindowCache
 )
+from .lizard_attention import (
+    LolcatsLizardAttention, LizardAttentionCache
+)
 # Experimental chunk linear attentions
 from .linear_window_attention_tk_long import (
     LolcatsTKWindowLongAttention,
