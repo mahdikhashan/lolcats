@@ -43,14 +43,24 @@ def gate_products(gamma):
 
 def gla(fq, fk, v, gamma):
     w = (fq @ fk.transpose(-1, -2)) * gate_products(gamma)[:, None]
-    return (w @ v) / w.sum(-1, keepdim=True)
+    # Guard 0 / 0 when every weight in a row underflows
+    return (w @ v) / w.sum(-1, keepdim=True).clamp_min(torch.finfo(w.dtype).tiny)
+
+
+def sink_softmax(scores, meta):
+    """
+    exp(scores) / (sum(exp(meta)) + sum(exp(scores))) over the last dim, shifted
+    by the row max over scores and meta so exp cannot overflow
+    """
+    m = torch.maximum(scores.amax(-1, keepdim=True), meta.max()).detach()
+    e = (scores - m).exp()
+    return e / ((meta - m).exp().sum(-1, keepdim=True) + e.sum(-1, keepdim=True))
 
 
 def awa(q, k, v, meta, window):
     mask = window_mask(q.shape[-2], window, q.device)
     scores = q @ k.transpose(-1, -2) / math.sqrt(q.shape[-1])
-    e = scores.masked_fill(~mask, float("-inf")).exp()
-    return (e @ v) / (meta.exp().sum() + e.sum(-1, keepdim=True))
+    return sink_softmax(scores.masked_fill(~mask, float("-inf")), meta) @ v
 
 
 class LizardAttention(nn.Module):
@@ -225,14 +235,14 @@ class LolcatsLizardAttention(LizardAttention):
                             + torch.einsum('bhf,bhd->bhfd', fk[:, :, i], v[:, :, i]))
                 k_state = g * k_state + fk[:, :, i]
                 y_gla = (torch.einsum('bhf,bhfd->bhd', fq[:, :, i], kv_state) /
-                         torch.einsum('bhf,bhf->bh', fq[:, :, i], k_state)[..., None])
+                         torch.einsum('bhf,bhf->bh', fq[:, :, i], k_state)[..., None]
+                         .clamp_min(torch.finfo(q.dtype).tiny))
                 # Sliding window softmax attention with sink tokens
                 k_cache = torch.cat([k_cache, k[:, :, i:i + 1]], dim=2)[:, :, -self.window:]
                 v_cache = torch.cat([v_cache, v[:, :, i:i + 1]], dim=2)[:, :, -self.window:]
-                e = (torch.einsum('bhd,bhnd->bhn', q[:, :, i], k_cache)
-                     / math.sqrt(q.shape[-1])).exp()
-                y_awa = (torch.einsum('bhn,bhnd->bhd', e, v_cache)
-                         / (meta.exp().sum() + e.sum(-1, keepdim=True)))
+                scores = (torch.einsum('bhd,bhnd->bhn', q[:, :, i], k_cache)
+                          / math.sqrt(q.shape[-1]))
+                y_awa = torch.einsum('bhn,bhnd->bhd', sink_softmax(scores, meta), v_cache)
                 y.append(y_gla + alpha * y_awa)
             y = torch.stack(y, dim=2)
         cache.update(kv_state, k_state, k_cache, v_cache, self.layer_idx, q.shape[2])
