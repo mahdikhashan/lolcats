@@ -126,13 +126,17 @@ def load_model_from_config(model_config_name: str,
                            config_dir: str = './configs',
                            lm_eval_model: bool = False,
                            path_to_lm_eval_harness: str = '/juice2/scr2/mzhang/projects/lm-evaluation-harness',
+                           cache_dir: str = None,
                           ):
     """
     Load model from a config file
+    -> cache_dir overrides the model config's cache_dir if not None
     """
     # Load model configs
     model_config_path = join(config_dir, 'model', f'{model_config_name}.yaml')
     model_config = OmegaConf.load(model_config_path)
+    if cache_dir is not None:
+        model_config.model.cache_dir = cache_dir
 
     model_loader = get_pretrained_loader(**model_config.model)
     tokenizer = model_loader.load_tokenizer()
@@ -160,12 +164,14 @@ def load_model_from_checkpoint(attn_mlp_checkpoint_path: str = None,
                                lm_eval_model: bool = False,
                                path_to_lm_eval_harness: str = '/juice2/scr2/mzhang/projects/lm-evaluation-harness',
                                profile_model: bool = False,
+                               cache_dir: str = None,
                               ):
     """
     Load model architecture from a checkpoint path
     -> attn_mlp_checkpoint_path should direct to checkpoint with learned MLPs
     -> finetune_checkpoint_path should direct to checkpoint with all other parameters
     -> Assumes checkpoint_path stings have names for model_config and finetune_configs
+    -> cache_dir overrides the model config's cache_dir if not None
     """
 
     # Load model configs
@@ -185,6 +191,8 @@ def load_model_from_checkpoint(attn_mlp_checkpoint_path: str = None,
             model_config = finetune_checkpoint_path.split('/')[-1].split('-m=')[-1].split('-')[0]
         model_config_path = join(config_dir, 'model', f'{model_config}.yaml')
         model_config = OmegaConf.load(model_config_path)
+    if cache_dir is not None:
+        model_config.model.cache_dir = cache_dir
 
     if profile_model:
         model_config['attention']['attention_type'] += '_profile'

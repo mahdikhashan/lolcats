@@ -13,9 +13,10 @@ import pandas as pd
 
 from src.model.load_model_for_eval import load_model_from_checkpoint, load_model_from_config
 
-LM_EVALUATION_HARNESS_PATH = '/workspace/lm-evaluation-harness'  # Change this to where you clone LM eval harness from
+# Where you clone LM eval harness to and where results are saved (change here or set the environment variables)
+LM_EVALUATION_HARNESS_PATH = os.environ.get('LM_EVALUATION_HARNESS_PATH', '/workspace/lm-evaluation-harness')
 
-RESULTS_PATH = '/workspace/results/results_lm_eval.csv'
+RESULTS_PATH = os.environ.get('LM_EVAL_RESULTS_PATH', '/workspace/results/results_lm_eval.csv')
 
 
 OPEN_LLM = [  # task, shots
@@ -169,6 +170,7 @@ def main():
             debug=args.debug,
             lm_eval_model=True,
             path_to_lm_eval_harness=LM_EVALUATION_HARNESS_PATH,
+            cache_dir=args.cache_dir,
         )
     elif args.model_type == 'model_config':
         model, model_config, tokenizer = load_model_from_config(
@@ -176,6 +178,7 @@ def main():
             config_dir=args.config_dir,
             lm_eval_model=True,
             path_to_lm_eval_harness=LM_EVALUATION_HARNESS_PATH,
+            cache_dir=args.cache_dir,
         )
     elif args.model_type == 'huggingface':
         from lm_eval.models import get_model
