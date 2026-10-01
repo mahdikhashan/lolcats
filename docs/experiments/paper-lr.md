@@ -1,4 +1,4 @@
-# Experiment: learning rate and schedule of the paper in stage 1, with feature dimension 32 and loss factor 1
+# Experiment: learning rate and schedule of the paper in stage 1, with feature dimension 32
 
 **Status:** The config is ready, with a CPU test. No stage 1 training with this config has run yet.
 
@@ -11,7 +11,7 @@ Background:
 - Section 1 of the [gap analysis](../11-gap-analysis.md) gives the stage 1 recipe as the most probable cause of the gap. Factors 1 and 2 of section 12 give the mechanism: a 10× higher learning rate with no warmup and no decay.
 - Factor 1 of section 12 predicted a saturated gate. The [stage difference experiment](stage-difference.md) found it: γ is above 0.999 in layers 1–15.
 - Section 13.4 ranks the stage 1 hyperparameters as root cause 1.
-- The [feature dimension experiment](feature-dimension.md) found that feature dimension 32 does not change the MMLU-subset result or the saturation. This experiment keeps feature dimension 32. Against that run, it changes the learning rate, the schedule and the loss factor.
+- The [feature dimension experiment](feature-dimension.md) found that feature dimension 32 does not change the MMLU-subset result or the saturation. This experiment keeps feature dimension 32, so it changes only the learning rate and the schedule against that run.
 
 ## What changes, and what stays the same
 
@@ -19,31 +19,17 @@ Background:
 |---|---|---|---|---|
 | Model config | `distill_llama3_2_1b_lizard_w128_fd128_m4` | `distill_llama3_2_1b_lizard_w128_fd32_m4` | `distill_llama3_2_1b_lizard_w128_fd32_m4` | – |
 | Feature dimension | 128 | 32 | 32 | 128 |
-| Distill config | `distill_alpaca_clean_xent0_mse1000_lr1e-2_1b` | The same as Run 1 | **`distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b`** | – |
+| Distill config | `distill_alpaca_clean_xent0_mse1000_lr1e-2_1b` | The same as Run 1 | **`distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b`** | – |
 | Peak learning rate | 1e-2 | 1e-2 | **1e-3** | 1e-3 |
 | Schedule | ReduceLROnPlateau, almost constant | The same as Run 1 | **Cosine** | Cosine |
 | Warmup | None | None | **118 steps, linear (10%)** | 10%, linear |
 | Learning rate at the end | 1e-2 or 1e-3 | The same as Run 1 | **0** | 0.1 × peak |
-| Loss factor (`mse_factor`) | 1000 | 1000 | **1** | No extra factor |
 | AdamW betas | (0.9, 0.999) | The same | The same | (0.9, 0.99) |
 | Gradient clipping | None | None | None | 1.0 |
 | Storage of the trainable weights | bf16 | bf16 | bf16 | Not given (probably float32, see below) |
-| Data, steps, seed | Alpaca-cleaned, 1,178 steps, seed 0 | The same | The same | Alpaca-cleaned, 1,178 steps |
+| Data, loss, steps, seed | Alpaca-cleaned, 1000 × MSE, 1,178 steps, seed 0 | The same | The same | Alpaca-cleaned, 1,178 steps |
 
-Three settings change against the feature dimension run: the learning rate, the schedule and the loss factor. The loss factor multiplies the loss by a constant. Adam does not change with a constant factor on the loss, except through eps (next section). Thus the comparison with that run shows mainly the effect of the learning rate and the schedule.
-
-### Loss factor 1
-
-The stage 1 loss of the code is this (`src/trainer/distill_attention_xent_mse.py`):
-
-```text
-loss = mse_factor × (1/N) × Σ over the N layers of the mean squared error of the layer
-```
-
-- With `mse_factor: 1`, the loss is the mean over the layers. This agrees with the $\frac{1}{N}$ in the formula of the paper ([math-formula.md](../math-formula.md), section 4). The code already divides by the number of layers. Thus `mse_factor` is an extra factor, not the $\frac{1}{N}$ of the paper.
-- One difference stays. In each layer, the code takes the **mean** of the squared errors. The paper takes the **sum** (the squared Frobenius norm). The sum has 4,194,304 terms (1 × 32 heads × 2048 positions × 64). Thus the loss of the paper is 4,194,304 × the loss of this run (D11 in [math against code](../math-code-discrepancy.md)).
-- **Validation loss:** the logged loss of this run is 1000× smaller than in the earlier runs. To compare it with them, multiply it by 1000.
-- **Risk:** the gradients are also 1000× smaller than in the earlier runs. Adam divides each step by √v + eps, with eps = 1e-8. If the gradients of some parameters come near eps, their steps become smaller than the learning rate gives. The trainer does not log gradient norms, so this run cannot measure this effect.
+Only the learning rate and the schedule change against the feature dimension run. Thus the comparison with that run shows their effect alone.
 
 ### Differences from the paper that stay
 
@@ -74,7 +60,7 @@ Thus this run can show a worse result than the recipe of the paper would give wi
 
    ```bash
    make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=2h \
-     ARGS="--model_config distill_llama3_2_1b_lizard_w128_fd32_m4 --distill_config distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b --no_finetune"
+     ARGS="--model_config distill_llama3_2_1b_lizard_w128_fd32_m4 --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b --no_finetune"
    ```
 
    - `make hf-job` does not give `DISTILL_CONFIG` to the job. Thus `ARGS` gives the configs. argparse keeps the last value.
@@ -85,7 +71,7 @@ Thus this run can show a worse result than the recipe of the paper would give wi
 ```bash
 conda activate lolcats-env
 export HF_TOKEN=hf_...
-nohup make distill-local DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b > distill-paper-lr.log 2>&1 &
+nohup make distill-local DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b > distill-paper-lr.log 2>&1 &
 ```
 
 `LOCAL_MODEL_CONFIG` has the default `distill_llama3_2_1b_lizard_w128_fd32_m4`. The [feature dimension experiment](feature-dimension.md) describes the memory risk on the A10 (option B there).
@@ -95,7 +81,7 @@ nohup make distill-local DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1_lr1e-3_c
 Both options write this checkpoint. Option A also pushes it to the Hub.
 
 ```
-checkpoints/distill_llama3_2_1b_lizard_w128_fd32_m4/dl-d=distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b-m=distill_llama3_2_1b_lizard_w128_fd32_m4-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt
+checkpoints/distill_llama3_2_1b_lizard_w128_fd32_m4/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b-m=distill_llama3_2_1b_lizard_w128_fd32_m4-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt
 ```
 
 The name contains the new distill config. Thus no earlier checkpoint gets overwritten.
@@ -104,7 +90,7 @@ The name contains the new distill config. Thus no earlier checkpoint gets overwr
 
 ```bash
 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 \
-DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b \
+DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b \
 MODEL_CONFIG=distill_llama3_2_1b_lizard_w128_fd32_m4 \
 MODELS=stage1 TASKS=mmlu_subset \
 scripts/compare_stages.sh 2>&1 | tee mmlu-paper-lr.log
@@ -114,11 +100,11 @@ scripts/compare_stages.sh 2>&1 | tee mmlu-paper-lr.log
 
 ## How to compare
 
-All three runs use the same validation data and the same loss, except for the loss factor. Thus the validation loss of this run, multiplied by 1000, is directly comparable with the other runs.
+The validation losses are directly comparable, because all three runs use the same loss and the same validation data.
 
 | Measure | fd128, LoLCATs recipe | fd32, LoLCATs recipe | fd32, recipe of the paper |
 |---|---|---|---|
-| Stored stage 1 validation loss (on the scale of `mse_factor` 1000), and its step | 3.2549 at step 1,100 | 3.4219 at step 1,100 | Not measured yet (multiply the logged value by 1000) |
+| Stored stage 1 validation loss, and its step | 3.2549 at step 1,100 | 3.4219 at step 1,100 | Not measured yet |
 | MMLU-subset accuracy | 22.5 ± 2.5 | 23.2 ± 2.5 | Not measured yet |
 | Share of "A" answers | 95.4% | 66.0% | Not measured yet |
 | Letter mass | 0.018 | 0.024 | Not measured yet |
@@ -137,10 +123,9 @@ How to read the outcome:
 
 ## Code changes
 
-- `configs/experiment/distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b.yaml`: a copy of `distill_alpaca_clean_xent0_mse1000_lr1e-2_1b.yaml` with three changes:
+- `configs/experiment/distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b.yaml`: a copy of `distill_alpaca_clean_xent0_mse1000_lr1e-2_1b.yaml` with two changes:
   - `optimizer.lr: 0.001`,
-  - `lr_scheduler`: `cosine_warmup` with `num_warmup_steps: 118` and `num_training_steps: 1178`,
-  - `trainer.mse_factor: 1`. The name of the config contains `mse1` for this reason.
+  - `lr_scheduler`: `cosine_warmup` with `num_warmup_steps: 118` and `num_training_steps: 1178`.
 
 The trainer already supports `cosine_warmup` (`src/trainer/optim.py`). It steps the scheduler once after each optimizer step (`src/trainer/default_lm.py`). Thus the step counts are optimizer steps. [Document 2](../02-compute-and-cost.md) gives 2 epochs × 589 = 1,178 optimizer steps for each stage. W&B reported step 1,178 at the end of stage 1 of Run 1 ([document 4](../04-training-runs.md)).
 
@@ -153,8 +138,7 @@ The trainer already supports `cosine_warmup` (`src/trainer/optim.py`). It steps 
   | Learning rate | 0 | 8.5e-6 | 5.0e-4 | 9.9e-4 | **1.0e-3** | 9.3e-4 | 5.9e-4 | 1.6e-4 | 1.3e-5 | 0 |
 
   The maximum is 1e-3 at step 118. The first optimizer step has a learning rate of 0, as in every schedule of `transformers` with warmup.
-- **Stage 1 on CPU:** The real `distill_llama.main()` ran with the arguments of option A, a tiny Llama and synthetic data. It finished with exit 0 and skipped stage 2. The log shows `lr: 0.001`, `cosine_warmup` and `mse_factor: 1` in the config, and the learning rates of gradient steps 1 and 2 agree with the warmup. The run name starts with `dl-d=distill_alpaca_clean_xent0_mse1_lr1e-3_cosine_1b-m=distill_llama3_2_1b_lizard_w128_fd32_m4`.
-- **Loss factor:** On the same tiny model and data, the first evaluation loss is 5.120 with `mse_factor: 1`, against 5119.570 with `mse_factor: 1000`. Thus the factor scales the loss by exactly 1000, as expected.
+- **Stage 1 on CPU:** The real `distill_llama.main()` ran with the arguments of option A, a tiny Llama and synthetic data. It finished with exit 0 and skipped stage 2. The log shows `lr: 0.001` and `cosine_warmup` in the config, and the learning rates of gradient steps 1 and 2 agree with the warmup. The run name starts with `dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b-m=distill_llama3_2_1b_lizard_w128_fd32_m4`.
 - The CPU test used the optimizer `adamw_torch`, because the fused optimizer needs CUDA. This adds `-o=adamw_torch` to the run name of the test only. The test had 2 optimizer steps, and the trainer saves checkpoints only at multiples of 100 steps. Thus the test wrote no checkpoint.
 
 ## Results
