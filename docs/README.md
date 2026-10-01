@@ -20,6 +20,14 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | 10 | [Open issues and next steps](10-open-issues-and-next-steps.md) | Known code issues, hypotheses, planned experiments and decision rules |
 | 11 | [Gap analysis](11-gap-analysis.md) | Root cause analysis of the gap to the paper. Ranked causes, a hole in the check of checkpoint loading, and a debugging sequence. A plan to close the gap, and the effect of each hyperparameter |
 
+## Experiments
+
+Each experiment has its own document in `experiments/`, with its method, its runs and its results.
+
+| Experiment | Question | Status |
+|---|---|---|
+| [Stage difference](experiments/stage-difference.md) | Does the gap start in stage 1 or in stage 2? Section 10 of the gap analysis. | Quick check done. Full run not done yet. |
+
 ## Glossary
 
 These notes use each term below with one meaning only.

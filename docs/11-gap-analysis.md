@@ -360,6 +360,8 @@ The table shows how to read the outcome. The values are examples of MMLU-subset 
 
 The review gives this experiment a higher priority than almost all other steps.
 
+The tool is `compare_stages.sh`. The runs and their results are in [experiments/stage-difference.md](experiments/stage-difference.md).
+
 ## The strongest hypothesis
 
 With all the evidence together, the review states this hypothesis:
