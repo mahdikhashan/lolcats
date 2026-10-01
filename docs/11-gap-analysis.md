@@ -9,7 +9,7 @@ This document is a root cause analysis of the gap between the evaluation results
 
 The gap looks **real**. The review does not treat it as mainly a problem of the MMLU evaluation.
 
-Sections 1–10, the hypothesis and the debugging sequence come from the review. Sections 11 and 12 come from two later analyses: a guideline to close the gap, and the contribution of each hyperparameter. A paragraph that starts with **Repository check** gives the result of a check against the code or the other documents. These checks occurred during the writing of this document.
+Sections 1–10, the hypothesis and the debugging sequence come from the review. Sections 11 and 12 come from two later analyses: a guideline to close the gap, and the contribution of each hyperparameter. Section 13 ranks the causes of the "A" collapse after the stage difference experiment, and gives a debugging plan. A paragraph that starts with **Repository check** gives the result of a check against the code or the other documents. These checks occurred during the writing of this document.
 
 ## The gap
 
@@ -615,3 +615,130 @@ These settings match the paper: the data, the token count, the batch size and th
    - Each run takes approximately 50 minutes on the H200. Compare the runs with the PR C script.
    - For the thesis, this shows how much of the stage 1 gap comes from precision, and how much from the recipe. It gives this result before any stage 2 run.
 3. **Two checks that can run now:** the stored checkpoint step (factor 9), and `gates.py` (the prediction of factor 1).
+
+## 13. Ranking of the causes of the "A" collapse, and a debugging plan
+
+This section ranks the seven possible causes of the "A" collapse in section 4. It also examines three possible root causes:
+
+- the stage 1 hyperparameters,
+- a mismatch between the code and the equations of the paper,
+- the initialization of the Lizard parameters.
+
+The task of stage 1 is the attention approximation. Thus the plan measures the attention approximation directly. It uses MMLU only as a final check.
+
+**Basis:** No part of this section ran. The analysis uses three sources: the measurements of the [stage difference](experiments/stage-difference.md) and [temperature](experiments/temperature.md) experiments, the code, and the text of the paper (version 4). The mechanism in section 13.2 is a hypothesis.
+
+### 13.1 Evidence that the ranking uses
+
+- **MMLU subset:** the teacher gets 33.7. After stage 1, the Lizard model gets 22.5 and selects "A" for 95.4% of the questions. After stage 2, it gets 24.9 and selects "A" for 98.6%.
+- **PIQA:** 57.6 after stage 1, and 68.0 after stage 2.
+- **Gate:** in layers 1–15, γ is more than 0.999 for every token. Only layer 0 has a decay. Stage 2 does not change this.
+- **Letter probability:** after `Answer:`, the letters " A" to " D" together get 1.8% of the next-token probability (stage 1, T = 1). Thus the model almost does not follow the 5-shot format.
+
+### 13.2 A mechanism that connects the evidence (hypothesis)
+
+1. **Sinks in the teacher.**
+   - In Llama models, many heads from layer 1 on usually put most of their attention on the first token or on BOS. The value vector of such a sink token is near zero.
+   - In layer 0, the attention is mostly local.
+   - This project did not measure this for Llama-3.2-1B.
+2. **The gated branch cannot make its output smaller.**
+   - The code divides the gated branch by the sum of its weights (`src/model/linear_attention/lizard_attention.py:47`). Thus its output is always a weighted mean of value vectors.
+   - α scales only the window branch. The sink logits occur only in the denominator of the window branch.
+   - To copy a head that puts its attention on a sink, the gated branch must put its weight on the BOS tokens. These tokens have small value vectors.
+   - In the packed Alpaca data, the BOS tokens are approximately 190 tokens apart (approximately 10M tokens per epoch over 51,560 examples). To reach them, the gate products must stay near 1. Thus γ goes to 1.
+   - This agrees with the measured pattern: the gate decays in layer 0 and saturates in layers 1–15.
+3. **No information about the order of the tokens.**
+   - With γ ≈ 1 and no RoPE, the gated branch gets almost no information about the order of the tokens in the full prefix. The window branch gets almost none inside its 128 tokens.
+   - Thus the model cannot connect "A." with the text of its option.
+   - It also cannot copy the "Answer: X" pattern of the 5-shot examples. Copying needs information about the previous token.
+   - This agrees with the letter probability of 1.8%. Then a prior for " A" decides the selection.
+   - PIQA and ARC-Easy score the text of the answer, not a letter. Thus they lose less.
+4. **BOS in training, no BOS in evaluation.**
+   - Each training example starts with BOS (`src/dataloaders/alpaca_clean.py:132`).
+   - The harness adds no special tokens for causal models (`lm_eval_harness/models_huggingface.py:379-380`).
+   - If the gated branch uses BOS as its sink, the evaluation prompts give it no sink.
+
+### 13.3 Ranking of the seven causes
+
+| Rank | Cause (section 4) | Role | Evidence | Status |
+|---|---|---|---|---|
+| 1 | (2) Collapse or saturation of the gate | The concrete defect | γ > 0.999 in layers 1–15. Stage 2 does not fix it. | Measured |
+| 2 | (1) A poor approximation in stage 1 | The general cause that contains causes 2 and 3 | The drop and the "A" collapse occur after stage 1 | This project measured the outcome, but not the error of each layer. |
+| 3 | (4) A bias in the output or the logits | The path from the damaged attention to " A" | Letter probability 1.8%. "A" for 95–99% of the questions. | Hypothesis. A logit lens can test it. |
+| 4 | (3) Collapse of the feature maps | A possible second defect | Weight RMS 0.02 → 0.15–0.22, maximum up to 2.3. The entropy of the features is not known. | Not measured |
+| 5 | (5) A mismatch in the prompts or the tokenization | BOS in training, no BOS in evaluation | The teacher gets a sensible score in the same harness | A test of a few minutes |
+| 6 | (7) Numerical instability | Mainly a problem of the training precision | The NaN has a fix. The Lizard calculations use float32. In 13 of 16 layers, the bf16 storage leaves the sink logits at exactly 0.5, 1 or 2. | Not a probable cause of the collapse |
+| 7 | (6) A difference in the scoring of `Answer:` → `" A"` | – | Teacher 33.7 in the same harness. The temperature changes no prediction. | Least probable |
+
+### 13.4 Three possible root causes
+
+| Rank | Root cause | Evidence for | Evidence against | Least expensive test |
+|---|---|---|---|---|
+| 1 | Stage 1 hyperparameters, with the bf16 storage of the trainable weights | 10× learning rate, constant schedule, no warmup and no clipping. The new gate is the part that is most sensitive to these settings. In 13 of 16 layers, the sink logits stop at a power of two, which points to bf16 rounding. | LoLCATs trains well at 1e-2, but its attention has no gate | Single-layer bench (step 5 in section 13.5) |
+| 2 | Mismatch between the code and the equations of the paper | Two ambiguous points that can have a large effect (below) | The code passes all reference tests | A review against the paper, then the single-layer bench |
+| 3 | Initialization | W_γ = 0 gives γ = 0.5 at the start | A constant learning rate of 1e-2 can remove the effect of the start values in a few hundred steps | One arm of the single-layer bench |
+
+#### Code against the equations of the paper
+
+These parts of the code match the paper:
+
+- one scalar gate for each token, shared by all heads (Section 5),
+- the range of the gate products,
+- a window of 128 tokens with 4 sink logits,
+- the output Ŷ = Ŷ_gate + α · Ŷ_anchor, and the scale 1/√d,
+- no RoPE.
+
+At two points, the paper is not clear, and the code had to make a choice:
+
+- **(a) Normalization of the gated branch.**
+  - The parallel equation in Section 3.1 divides by the sum of the weights.
+  - The recurrent form in the same section has no denominator. The matrix form in Section 4 also has no denominator.
+  - The paper says that it uses FLA kernels. As far as this project knows, the GLA kernels of FLA do not normalize.
+  - The code normalizes. A gated branch without normalization can make its output small by itself. Then it does not need the BOS tokens as sinks (section 13.2).
+- **(b) Feature maps shared by all 32 heads.**
+  - Each layer has one map from 64 to 128 dimensions for φq, and one for φk. These maps have 16,384 parameters for each layer.
+  - The paper does not say if all heads share the feature maps. Appendix B says that the other design choices follow the defaults of LoLCATs.
+  - The default of LoLCATs (`untied_head_einsum`) gives each head its own map. At feature dimension 128, this is 524,288 parameters for each layer.
+
+Smaller points:
+
+- The code uses Σ exp(tⱼ) in the denominator of the window branch. The paper writes Σ tⱼ ([document 9](09-paper-comparison.md)).
+- The loss compares the outputs before `o_proj`.
+- Section 4 writes the feature maps with `exp`. Table 13 gives softmax.
+
+**Note:** The tests in [document 8](08-verification.md) compare the code with `reference.py` of jku-thesis. The same reading of the paper produced both. Thus these tests cannot find a wrong reading at point (a) or (b).
+
+#### Initialization
+
+- **W_γ = 0 gives γ = 0.5 at the start**. With this value, the gated branch keeps almost no weight on tokens more than one or two positions back.
+  - The gradient from a token n positions back is proportional to approximately n · 0.5^(n−1). This is approximately 0.02 at n = 10, and approximately 1e-28 at n = 100.
+  - Thus early training gets a signal only from near tokens. When γ increases, the signal from far tokens starts.
+  - With a constant learning rate of 1e-2, no warmup and no clipping, the gate can then go directly to saturation.
+  - GLA and Mamba-2 start most gate values much nearer to 1. The paper does not give a start value.
+- **The start value of φ (standard deviation 0.02) is not a probable cause**. At feature dimension 128, the default initialization of LoLCATs gives a standard deviation of approximately 0.016.
+- **α = 1 and sink logits = 0 are not probable causes**. With α = 1, the first output is approximately twice a normal attention output.
+
+### 13.5 Debugging plan
+
+The main metric is the error of the attention output of each layer against the teacher. A second metric is the similarity of the attention patterns. MMLU is only a final check. Steps 0–3 need no training. They run on the A10 with the existing checkpoints.
+
+| Step | Question | Method (section of the [XAI document](experiments/xai.md)) | Cost |
+|---|---|---|---|
+| 0 | Does the missing BOS cause the collapse? | The MMLU subset and PIQA with and without BOS, for the teacher and the stage 1 model. Also the letter probability of the teacher. | A few minutes |
+| 1 | How good is the approximation in each layer and each head? | Relative error ‖ŷ − y‖² / ‖y‖², with the inputs of the teacher and with the inputs of the Lizard model. Attention maps (section 9): the weight on the first token or BOS, the weight on the previous token, the mean distance. The weight of the gated branch on BOS. The entropy of the feature maps (section 8). A heatmap of the similarity of the hidden states (section 2). | Approximately 1 hour |
+| 2 | Is γ ≈ 1 the best solution for the loss, or did the training stop there? | Set γ to a constant value in each layer (0.5, 0.9, 0.99, 0.999 or 1). Measure the stage 1 loss for each value. | Forward passes only |
+| 3 | Which layers change the damaged attention into " A"? | A logit lens at `Answer:` (section 3). The KL divergence to the teacher (section 1). Replace the attention of one layer at a time with the exact teacher attention, with `train_attention=True` (section 10). A test that repeats a random token sequence, to find a loss of the order information. | Approximately 1 hour |
+| 4 | Which reading of the paper is right? | List points (a) and (b) and the smaller points, each with the text of the paper | Desk work |
+| 5 | Which root cause causes the saturation? | Record the inputs and outputs of the teacher for layers 0, 1, 8 and 15. The stage 1 of jku-thesis already trains layer by layer with hooks. Train only these layers, in float32. Combine: with or without normalization × shared or per-head φ × γ start 0.5 or near 1 × current recipe or recipe of the paper. | A few minutes for each run on the A10 |
+| 6 | Does a full stage 1 with the fixes recover? | First keep the trainable weights in float32 (factor 0 of section 12). Then use the best settings from step 5. Record γ every 50 steps, and the gradient norm and update norm of each parameter group (section 7). | Approximately 50 minutes for each run on the H200 |
+| 7 | Can stage 2 start? | Only after a stage 1 passes: a lower error in every layer, no saturated gate, a pass of the repeat test, and no single-letter pattern | – |
+
+### 13.6 Decision rules
+
+- **BOS removes the collapse (step 0):** the gated branch uses BOS as its sink. This supports point (a).
+- **A forced decay gives a lower loss (step 2):** the training stopped at a bad point. Then examine the recipe or the start value of the gate.
+  - This test prefers γ = 1, because the other parameters adapted to γ ≈ 1. Step 5 is the clean test.
+- **Every variant with normalization saturates, and no variant without normalization saturates (step 5):** the normalization is the cause.
+- **Saturation occurs only at a constant learning rate of 1e-2:** the hyperparameters are the cause.
+- **Saturation occurs only with γ = 0.5 at the start:** the initialization is the cause.
+- **Per-head feature maps give a much lower error:** the shared feature maps do not have sufficient capacity.
