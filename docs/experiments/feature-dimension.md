@@ -1,6 +1,6 @@
 # Experiment: feature dimension 32 in stage 1
 
-**Status:** The config and the tools are ready, with a CPU test on a tiny model. No stage 1 training with this config has run yet.
+**Status:** Stage 1 with feature dimension 32 trained on HF Jobs. The MMLU subset evaluation ran on 2026-10-01. PIQA is not evaluated yet.
 
 ## Question
 
@@ -81,11 +81,11 @@ The values for feature dimension 128 come from the [stage difference experiment]
 
 | Measure | Feature dimension 128 | Feature dimension 32 |
 |---|---|---|
-| Stored stage 1 validation loss (`distill/eval/loss`) | 3.2549 at step 1,100 | Not measured yet |
+| Stored stage 1 validation loss (`distill/eval/loss`) | 3.2549 at step 1,100 | 3.4219 at step 1,100 |
 | PIQA accuracy after stage 1 | 57.6 ± 1.2 | Not measured yet |
-| MMLU-subset accuracy after stage 1 | 22.5 ± 2.5 | Not measured yet |
-| Share of "A" answers on the MMLU subset | 95.4% | Not measured yet |
-| Layers with γ above 0.999 for 100.0% of the tokens (after rounding) | 15 of 16 | Not measured yet |
+| MMLU-subset accuracy after stage 1 | 22.5 ± 2.5 | 23.2 ± 2.5 |
+| Share of "A" answers on the MMLU subset | 95.4% | 66.0% |
+| Layers with γ above 0.999 for 100.0% of the tokens (after rounding) | 15 of 16 | 14 of 16 (layer 15: 99.9%) |
 
 Both runs use the same stage 1 loss (1000 × MSE on the same layer outputs) and the same validation data. Thus their validation losses are directly comparable.
 
@@ -118,4 +118,81 @@ These tests ran on CPU with a tiny Llama and synthetic data. They used the real 
 
 ## Results
 
-Not run yet.
+### Run 1: MMLU subset (2026-10-01)
+
+- Training: stage 1 only, on HF Jobs (option A). The job pushed the checkpoint to `nanoman1/lolcats-lizard-llama-3.2-1b`. This document does not record the job ID or the training time.
+- Evaluation command: `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODEL_CONFIG=distill_llama3_2_1b_lizard_w128_fd32_m4 MODELS=stage1 TASKS=mmlu_subset scripts/compare_stages.sh`
+- Run directory: `results/stages/20261001-183601`, on `student06`, GPU 0 (A10)
+- Code: lolcats `92010bc`, harness `b281b09`
+- Software: Python 3.11.16, torch 2.5.1 (CUDA 12.4), transformers 4.43.1, peft 0.9.0
+
+#### Checkpoint
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Bytes per parameter | Stored step | Stored loss |
+|---|---|---|---|---|---|---|---|
+| Stage 1, fd32 (`..._distill.pt`) | `768986c87b4ce09f8c503a21dcbb5db6b94b4c59fabf339dd83617869192c918` | 244,370 B | 98,384 | bf16 (80 tensors) | 2.48 | 1100 | `distill/eval/loss` = 3.4219 |
+
+- **The load is complete.** All 80 Lizard parameters (16 layers × 5) are in the file and hold their values after the load.
+- The parameter count agrees with the value that the table at the top of this document predicts (98,384).
+- The number of bytes for each parameter is higher than for fd128 (2.16), because the tensors are smaller. The file has a constant overhead for each tensor.
+- The best checkpoint comes from step 1,100, the same step as for fd128.
+- The Hub also has `..._distill_1000.pt`, the periodic save at step 1,000. The Hub has no stage 1 results CSV for this run under the expected name. Thus the summary has no validation curve.
+
+#### Scores and answer letters
+
+| Model | Right answers | Accuracy | "A" | "B" | "C" | "D" | Accuracy if always "A" |
+|---|---|---|---|---|---|---|---|
+| Stage 1, fd128 ([stage difference](stage-difference.md), quick check 2) | 64 / 285 | 22.5 ± 2.5 | 95.4% | 2.8% | 1.8% | 0.0% | 24.2 |
+| Stage 1, fd32 | 66 / 285 | **23.2 ± 2.5** | 66.0% | 22.1% | 0.7% | 11.2% | 24.2 |
+| Teacher ([document 7](../07-results.md)) | 96 / 285 | 33.7 ± 2.8 | – | – | – | – | – |
+
+The difference between fd32 and fd128 is +0.7 points (2 questions). The unpaired SE of the difference is approximately 3.5, so z ≈ 0.2. Thus the two accuracies are not clearly different.
+
+| Model | Mass of the four letters | Confidence | Entropy over the four letters |
+|---|---|---|---|
+| Stage 1, fd128 ([temperature](temperature.md), T = 1) | 0.018 | 0.586 | 1.550 bits |
+| Stage 1, fd32 | 0.024 | 0.476 | 1.681 bits |
+
+#### Gates and Lizard parameters
+
+The gate values come from the same 5-shot prompt of `hendrycksTest-high_school_us_history` (2048 tokens) as in the stage difference experiment.
+
+| Measure | fd128 | fd32 |
+|---|---|---|
+| Layers 1–15: γ above 0.999 | 100.0% in all 15 layers | 100.0% in layers 1–14, 99.9% in layer 15 |
+| Layers 1–15: weight kept after 512 tokens | Rounds to 1.0 | Rounds to 1.0 |
+| Layer 0: γ above 0.999 | 58.0% | 55.3% |
+| Layer 0: weight kept after 128 / 256 / 512 tokens | 0.35 / 0.11 / 0.0059 | 0.71 / 0.53 / 0.25 |
+| α | 0.042–0.648 | 0.063–0.656 |
+| Sink logits exactly 0.5, 1 or 2 | 13 of 16 layers | 10 of 16 layers |
+| ‖W_γ‖ | 3.59–5.13 | 3.53–4.93 |
+| Feature-map weight RMS | 0.15–0.22 | 0.16–0.22 |
+
+#### Findings
+
+**Finding 1: feature dimension 32 gives a higher stage 1 validation loss**. The loss is 3.4219 against 3.2549 for fd128, at the same step. That is 0.167 higher (+5.1%). Both runs use the same loss and the same validation data. Thus the attention approximation with 32 is a little worse than with 128.
+
+**Finding 2: the MMLU-subset accuracy does not change**. fd32 gets 23.2 and fd128 gets 22.5 (z ≈ 0.2). Both are near the accuracy of "always A" (24.2) and far below the teacher (33.7).
+
+**Finding 3: the answers are less concentrated on "A", but not more often right.**
+
+- fd32 selects "A" for 66.0% of the questions, against 95.4% for fd128. It selects "B" for 22.1% and "D" for 11.2%.
+- The accuracy stays at the level of chance. Thus the other letters do not come from a better understanding of the questions.
+- The letter mass is still very small (0.024 against 0.018). The model still almost does not follow the 5-shot format.
+
+**Finding 4: the gate saturates the same way**. In layers 1–15, γ is above 0.999 for 99.9–100.0% of the tokens. The weight kept after 512 tokens rounds to 1.0. Only layer 0 has a decay, and it decays more slowly than with fd128. Thus the feature dimension does not cause the saturation of the gate.
+
+**Finding 5: the sink logits again stop at powers of two in most layers**. In 10 of 16 layers, the value is exactly 0.5, 1 or 2. This agrees with the bf16 rounding of the stage difference experiment (finding 3 there).
+
+### Interpretation
+
+- With the outcome table above, the result is between two rows. The validation loss is higher with 32, but the MMLU-subset accuracy is approximately the same.
+- **The feature dimension is not a cause of the gap on the MMLU subset**. A 4× smaller feature map changes the validation loss by only 5%, and changes the accuracy by less than one SE.
+- The gate saturation and the "A" preference do not depend on the feature dimension. This agrees with section 13 of the [gap analysis](../11-gap-analysis.md), which ranks the gate saturation as the main defect.
+- For the [math against code](../math-code-discrepancy.md) document: this result makes D4 (the meaning of "feature dimension 128") an improbable cause of the gap. It does not test D2 (one feature map for each head).
+- This result is preliminary. It uses only the MMLU subset. The comparison with fd128 uses unpaired SEs.
+
+### Open items
+
+1. **PIQA:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODEL_CONFIG=distill_llama3_2_1b_lizard_w128_fd32_m4 MODELS=stage1 TASKS=piqa scripts/compare_stages.sh`. Compare with 57.6 ± 1.2 for fd128.
+2. **Paired comparison:** `compare_stages.py` compares models only inside one run, and fd32 and fd128 need different values of `MODEL_CONFIG`. A paired comparison needs the per-question logs of both runs.
