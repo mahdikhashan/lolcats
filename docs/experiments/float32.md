@@ -1,6 +1,6 @@
 # Experiment: float32 in stage 1, with the learning rate of the paper and feature dimension 32
 
-**Status:** The config is ready, with CPU tests. No stage 1 training with this config has run yet.
+**Status:** Stage 1 trained on HF Jobs. The MMLU subset evaluation ran on 2026-10-01. PIQA and ARC-Easy are not evaluated yet.
 
 ## Question
 
@@ -116,15 +116,15 @@ All runs use the same validation data and the same loss (`mse_factor` 1000). Thu
 
 | Measure | fd32, LoLCATs recipe, bf16 | fd32, recipe of the paper, bf16 | fd32, recipe of the paper, float32 |
 |---|---|---|---|
-| Stored stage 1 validation loss, and its step | 3.4219 at step 1,100 | 8.1641 at step 700 | Not measured yet |
-| MMLU-subset accuracy | 23.2 ± 2.5 | 25.3 ± 2.6 | Not measured yet |
-| Share of "A" answers | 66.0% | 21.8% | Not measured yet |
-| Letter mass | 0.024 | 0.009 | Not measured yet |
+| Stored stage 1 validation loss, and its step | 3.4219 at step 1,100 | 8.1641 at step 700 | **4.9478 at step 1,100** |
+| MMLU-subset accuracy | 23.2 ± 2.5 | 25.3 ± 2.6 | 24.6 ± 2.5 |
+| Share of "A" answers | 66.0% | 21.8% | 53.0% |
+| Letter mass | 0.024 | 0.009 | 0.018 |
 | PIQA accuracy | Not measured yet | 55.8 ± 1.2 | Not measured yet |
 | ARC-Easy accuracy | Not measured yet | 34.1 ± 1.0 | Not measured yet |
-| Layers 1–15 with γ above 0.999 for 100.0% of the tokens | 14 of 15 | 0 of 15 | Not measured yet |
-| α | 0.063–0.656 | 1.000 in all 16 layers | Not measured yet |
-| Sink logits exactly at a power of two | 10 of 16 layers | 16 of 16 layers | Not measured yet |
+| Layers 1–15 with γ above 0.999 for 100.0% of the tokens | 14 of 15 | 0 of 15 | 0 of 15 (3 layers at 99.9%) |
+| α | 0.063–0.656 | 1.000 in all 16 layers | **0.602–0.786** |
+| Sink logits exactly at a power of two | 10 of 16 layers | 16 of 16 layers | No pattern (2 of 16 print as 0.25) |
 
 How to read the outcome:
 
@@ -160,4 +160,102 @@ These tests ran on CPU with a tiny Llama.
 
 ## Results
 
-Not run yet.
+### Run 1: MMLU subset (2026-10-01)
+
+- Training: stage 1 only, on HF Jobs (option A). The job pushed the checkpoint to `nanoman1/lolcats-lizard-llama-3.2-1b`. This document does not record the job ID or the training time.
+- Evaluation command: the command in "Evaluation on the A10" above, with `TASKS=mmlu_subset`
+- Run directory: `results/stages/20261002-013135`, on `student06`, GPU 0 (A10)
+- Code: lolcats `c2293a4`, harness `b281b09`
+- Software: Python 3.11.16, torch 2.5.1 (CUDA 12.4), transformers 4.43.1, peft 0.9.0
+
+#### Checkpoint
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Bytes per parameter | Stored step | Stored loss |
+|---|---|---|---|---|---|---|---|
+| Stage 1, fd32, recipe of the paper, float32 (`..._distill.pt`) | `75e6eddb923bf62ac736154a13b1d12df875f39c3705d0fa55d6dddfb1a03090` | 441,986 B | 98,384 | **float32** (80 tensors) | 4.49 | **1100** | `distill/eval/loss` = 4.9478 |
+
+- **The load is complete**. All 80 Lizard parameters (16 layers × 5) are in the file and hold their values after the load.
+- **The checkpoint is float32**. It has 4.49 bytes for each parameter, against 2.49 for the same model in bf16. The difference is the 2 extra bytes of each float32 value.
+- **The best checkpoint comes from step 1,100**, the last evaluation of the run. In the bf16 run with the same recipe, it came from step 700.
+- The Hub also has `..._distill_1000.pt`, the periodic save at step 1,000. The Hub has no stage 1 results CSV for this run under the expected name. Thus the summary has no validation curve.
+
+#### Scores and answer letters
+
+| Model | Right answers | Accuracy | "A" | "B" | "C" | "D" | Letter mass | Confidence | Entropy |
+|---|---|---|---|---|---|---|---|---|---|
+| fd32, LoLCATs recipe, bf16 | 66 / 285 | 23.2 ± 2.5 | 66.0% | 22.1% | 0.7% | 11.2% | 0.024 | 0.476 | 1.681 bits |
+| fd32, recipe of the paper, bf16 | 72 / 285 | 25.3 ± 2.6 | 21.8% | 2.8% | 36.8% | 38.6% | 0.009 | 0.494 | 1.664 bits |
+| fd32, recipe of the paper, float32 | 70 / 285 | **24.6 ± 2.5** | 53.0% | 2.1% | 12.6% | 32.3% | 0.018 | 0.492 | 1.677 bits |
+| Teacher ([document 7](../07-results.md)) | 96 / 285 | 33.7 ± 2.8 | – | – | – | – | – | – | – |
+
+The right answers are "A" 24.2%, "B" 24.9%, "C" 25.3% and "D" 25.6%. Against the fd32 run with the LoLCATs recipe, the difference is +1.4 points (z ≈ 0.4). Against the bf16 run with the same recipe, it is −0.7 points (z ≈ −0.2). These use unpaired SEs. Thus the three accuracies are not clearly different.
+
+#### Gates and Lizard parameters
+
+The gate values come from the same 5-shot prompt of `hendrycksTest-high_school_us_history` (2048 tokens) as in the earlier runs.
+
+| Layer | γ mean | γ min | γ above 0.999 | Kept after 128 | Kept after 512 | α | Sink logit (all 4 equal) | ‖W_γ‖ |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.961 | 0.827 | 0.0% | 0.0052 | 7.8e-10 | 0.602 | 0.39 | 2.33 |
+| 1 | 0.972 | 0.693 | 53.0% | 0.016 | 9.2e-09 | 0.659 | 0.28 | 2.13 |
+| 2 | 0.990 | 0.449 | 12.9% | 0.26 | 0.0048 | 0.658 | 0.30 | 1.33 |
+| 3 | 0.998 | 0.806 | 22.9% | 0.81 | 0.47 | 0.693 | 0.30 | 1.40 |
+| 4 | 0.999 | 0.875 | 69.6% | 0.86 | 0.58 | 0.747 | 0.20 | 1.47 |
+| 5 | 1.000 | 0.905 | 99.9% | 0.97 | 0.85 | 0.779 | 0.25 | 1.53 |
+| 6 | 1.000 | 0.923 | 99.9% | 0.96 | 0.84 | 0.748 | 0.28 | 1.57 |
+| 7 | 0.999 | 0.898 | 26.1% | 0.86 | 0.50 | 0.761 | 0.26 | 1.75 |
+| 8 | 0.998 | 0.894 | 22.8% | 0.66 | 0.15 | 0.786 | 0.21 | 1.57 |
+| 9 | 0.999 | 0.859 | 73.7% | 0.87 | 0.57 | 0.779 | 0.27 | 1.55 |
+| 10 | 0.999 | 0.761 | 97.5% | 0.89 | 0.68 | 0.766 | 0.22 | 1.38 |
+| 11 | 1.000 | 0.804 | 99.9% | 0.97 | 0.90 | 0.715 | 0.27 | 1.42 |
+| 12 | 0.999 | 0.740 | 96.8% | 0.98 | 0.92 | 0.720 | 0.25 | 1.46 |
+| 13 | 0.999 | 0.720 | 90.5% | 0.92 | 0.70 | 0.702 | 0.28 | 1.45 |
+| 14 | 0.998 | 0.642 | 6.7% | 0.83 | 0.50 | 0.697 | 0.33 | 1.36 |
+| 15 | 0.998 | 0.833 | 21.7% | 0.87 | 0.56 | 0.728 | 0.30 | 1.45 |
+
+The feature-map weights have an RMS of 0.086–0.131 and a maximum absolute value of 0.23–0.54. In the bf16 run with the same recipe, the RMS was 0.075–0.115. In the runs with the LoLCATs recipe, it was 0.15–0.22.
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. α moves away from 1.000 in most layers | α is 0.602–0.786 in all 16 layers | Yes |
+| 2. The best checkpoint comes from a later step than 700 | Step 1,100 | Yes |
+| 3. The validation loss is lower than 8.1641 | 4.9478 (−39%) | Yes |
+| 4. The gate stays unsaturated | No layer has γ above 0.999 for all tokens. The weight kept after 512 tokens is below 0.95 in every layer. But 3 layers have 99.9% of the tokens above 0.999. | Mostly |
+
+#### Findings
+
+**Finding 1: float32 removes the symptoms of bf16 rounding**. α moves to 0.60–0.79 in every layer. The validation loss improves until the last evaluation (step 1,100). The sink logits no longer stop at powers of two. Thus bf16 rounding caused the frozen α and the early stop of the paper-LR run.
+
+**Finding 2: the validation loss is much lower than with bf16, but higher than with the LoLCATs recipe**. It is 4.9478, against 8.1641 for the same recipe in bf16 (−39%) and 3.4219 for fd32 with the LoLCATs recipe (+45%). Thus float32 explains a large part of the high loss of the paper-LR run, but not all of the difference to the LoLCATs recipe.
+
+**Finding 3: the gate takes an intermediate state**. With the LoLCATs recipe, the gate saturated in 14 or 15 of the layers 1–15. With the recipe of the paper in bf16, it decayed fast in every layer. In this run:
+
+- Layers 0–2 decay fast. The weight kept after 512 tokens is 0.0048 or less.
+- Layers 5, 6, 11 and 12 keep 0.84–0.92 of the weight after 512 tokens. Their γ is above 0.999 for 96.8–99.9% of the tokens.
+- The other layers keep 0.15–0.70 after 512 tokens.
+
+**Finding 4: the validation loss still decreased at the end**. The best step is the last evaluation step. Thus a longer run, or a higher average learning rate, could lower the loss more. This is probable, not proved. The cosine schedule decays to 0, so the learning rate is very small in the last part of the run.
+
+**Finding 5: MMLU stays at the level of chance**. The accuracy is 24.6, and the letter mass is 0.018. The model selects "A" for 53.0% of the questions and almost never selects "B" (2.1%). In all four stage 1 models so far, the accuracy is between 22.5 and 25.3.
+
+### Interpretation
+
+- **The outcome is the second row of the outcome table**. The validation loss is lower than 8.1641 but higher than 3.4219, and no layer of 1–15 saturates fully. Thus bf16 caused part of the problem. The recipe of the paper with float32 still gives a higher loss than the LoLCATs recipe.
+- **Three explanations for the remaining difference** are possible. This run cannot separate them:
+  - **The gate state**. The LoLCATs runs, with a saturated gate, have the lowest loss. This agrees with the hypothesis of section 13.2 of the [gap analysis](../11-gap-analysis.md). In that hypothesis, a normalized gated branch reaches a lower loss when it can reach the BOS tokens.
+  - **Less training**. At a peak learning rate of 1e-3 with cosine decay, the weights can move much less in 1,178 steps than at a constant 1e-2. Factor 1 of section 12 gives this estimate. The feature-map weights are smaller than with the LoLCATs recipe, and the loss still decreased at the end (finding 4).
+  - **The other differences from the paper**: β2 = 0.999, no gradient clipping, the decay to 0 and feature dimension 32.
+- The removal of the bf16 rounding of the target (D10) and of the prediction (D13) can also lower the loss a little. Thus a small part of the improvement from 8.16 to 4.95 can come from the precision of the loss, not from better weights. This document has no measurement of this part.
+- **MMLU does not follow the validation loss**. The four stage 1 models have validation losses from 3.25 to 8.16, but their MMLU-subset accuracies are all near chance. Thus the MMLU subset does not separate these stage 1 models. PIQA and ARC-Easy can show differences better.
+- This result is preliminary. It uses only the MMLU subset, and the comparisons use unpaired SEs.
+
+### Open items
+
+1. **PIQA and ARC-Easy:** run the evaluation command with `TASKS="piqa arc_easy"`. Compare with 55.8 and 34.1 for the bf16 run with the same recipe.
+2. **Separate the explanations of the remaining difference:**
+   - The normalization of the gated branch (D1 in [math against code](../math-code-discrepancy.md)) and the sink hypothesis. Test them with the single-layer bench of section 13.5 of the gap analysis (step 5).
+   - A float32 run with the LoLCATs recipe. It shows whether float32 changes the result of the high learning rate too.
+   - The remaining differences from the paper: β2 = 0.99, gradient clipping 1.0, and a minimum learning rate of 0.1 × the peak. Clipping and the minimum learning rate need code changes.
+3. **Validation curve:** the Hub has no results CSV for this run under the expected name. A curve would show whether the loss still decreased strongly at the end.
