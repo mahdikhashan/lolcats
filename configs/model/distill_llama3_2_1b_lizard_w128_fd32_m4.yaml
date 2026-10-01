@@ -1,0 +1,29 @@
+name: llama-1b
+# Base model config — Llama 3.2 1B with Lizard (gated linear attention + sliding window with sink tokens)
+model:
+  pretrained_model_name_or_path: "meta-llama/Llama-3.2-1B"
+  cache_dir: "/workspace/lolcats/scratch/"   # CHANGE this
+  return_dict: true
+  device_map: auto
+  low_cpu_mem_usage: true
+  torch_dtype: bfloat16
+  rope_theta: 500000.0                      # Llama 3.2 uses 500K theta (NOT 10000 like Mistral)
+  attn_implementation: flash_attention_2
+
+# Attention swap config — Lizard attention (src/model/linear_attention/lizard_attention.py)
+attention:
+  attention_type: lolcats_llama_lizard
+
+  # Hedgehog feature map: learned head_dim -> feature_dim projection, then [softmax(xW), softmax(-xW)]
+  feature_dim: 32                           # 0.5 x head dimension (64), the LoLCATs rule; the fd128 config uses 128 (docs/hyperparameters.md)
+
+  # Sliding window softmax attention (AWA) with learnable sink ("meta") tokens
+  window_size: 128
+  num_meta: 4
+
+  # Which layers stay softmax (none — fully linearize)
+  softmax_attentions: []
+
+  # Train all attention layers
+  train_attention: true
+  remove_base_attn: true                    # Free original softmax weights after distill

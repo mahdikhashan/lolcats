@@ -19,6 +19,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | 9 | [Comparison with the paper](09-paper-comparison.md) | Architecture against the paper, recipe differences, and the 1B results of the paper |
 | 10 | [Open issues and next steps](10-open-issues-and-next-steps.md) | Known code issues, hypotheses, planned experiments and decision rules |
 | 11 | [Gap analysis](11-gap-analysis.md) | Root cause analysis of the gap to the paper. Ranked causes, a hole in the check of checkpoint loading, and a debugging sequence. A plan to close the gap, and the effect of each hyperparameter |
+| – | [Hyperparameters](hyperparameters.md) | Hyperparameters of the Lizard model with their sources, starting with the feature dimension of the feature maps |
 | – | [References](references.md) | External sources, each with a link and a short description |
 
 ## Experiments
@@ -30,6 +31,7 @@ Each experiment has its own document in `experiments/`, with its method, its run
 | [Stage difference](experiments/stage-difference.md) | Does the gap start in stage 1 or in stage 2? Section 10 of the gap analysis. | Two quick checks done: stage 1 on PIQA, and stages 1 and 2 on the MMLU subset. Both point to stage 1. The full run with the teacher is not done yet. |
 | [XAI for the distillation](experiments/xai.md) | Which interpretability methods can show if the distillation works, if the new parameters learn, and if the layers match the teacher? | Ideas only. Nothing has run yet. |
 | [Temperature on the MMLU subset](experiments/temperature.md) | Does the temperature change the MMLU-subset accuracy after stage 1 and after stage 2? | Run 1 done (stage 1 at T = 0.1, 0.5, 1 and 2): the accuracy does not change, as predicted. Stage 2 not run yet. |
+| [Feature dimension 32 in stage 1](experiments/feature-dimension.md) | Does a feature dimension of 32 (the LoLCATs rule) give a better stage 1 than 128? | Config and tools ready and tested on CPU. Stage 1 not trained yet. |
 
 ## Glossary
 
