@@ -8,6 +8,7 @@
 # -> export HF_TOKEN=<token with access to HF_REPO and meta-llama/Llama-3.2-1B>
 # -> ./compare_stages.sh                                    # 3 models x 3 tasks
 # -> MODELS="stage1 stage2" TASKS=piqa ./compare_stages.sh   # a part of it (TASKS can also include mmlu, all questions)
+# -> TEMPERATURE=0.5 ./compare_stages.sh                    # logits divided by 0.5 (see temperature.sh)
 # Writes OUT_DIR (default results/stages/<time>): env.txt, summary.md, summary.json, training/ with the
 # training results CSVs from HF_REPO, and <model>/<task>/ with eval.log and the logs of compare_stages.py
 # Override any variable below from the environment
@@ -88,6 +89,7 @@ echo "-> Recording the environment in $OUT_DIR/env.txt"
   echo "harness commit: $(git -C "$LM_EVAL_DIR" rev-parse HEAD)"
   echo "models: $MODELS"
   echo "tasks: $TASKS"
+  echo "temperature: ${TEMPERATURE:-1}"
   echo "HF_REPO: $HF_REPO"
   echo "stage 1 checkpoint: $DISTILL_CKPT"
   echo "stage 2 checkpoint: $FT_CKPT"
