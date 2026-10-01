@@ -18,6 +18,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | 8 | [Checks of the attention layer](08-verification.md) | Tests that show that the attention code calculates the equations of the paper and connects correctly into the model |
 | 9 | [Comparison with the paper](09-paper-comparison.md) | Architecture against the paper, recipe differences, and the 1B results of the paper |
 | 10 | [Open issues and next steps](10-open-issues-and-next-steps.md) | Known code issues, hypotheses, planned experiments and decision rules |
+| 11 | [Gap analysis](11-gap-analysis.md) | Root cause analysis of the gap to the paper. Ranked causes, a hole in the check of checkpoint loading, and a debugging sequence. A plan to close the gap, and the effect of each hyperparameter |
 
 ## Glossary
 
