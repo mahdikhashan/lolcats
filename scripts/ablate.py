@@ -5,7 +5,7 @@ Evaluate Lizard with one branch switched off at inference time (no retraining)
 Each branch alone is a weighted average of the values, so scaling by (1 + alpha)
 keeps the output on the scale of GLA + alpha * AWA that the next layer expects
 -> Run from the lolcats repo root, with eval_lm_harness.py's arguments:
-   ABLATE=no_gla PYTHONPATH=. python ablate.py --model_type lolcats_ckpt ...
+   ABLATE=no_gla PYTHONPATH=. python scripts/ablate.py --model_type lolcats_ckpt ...
 """
 import os
 import runpy

@@ -1,8 +1,8 @@
 """
 Find where the gap starts: the teacher, Lizard after stage 1 and Lizard after stage 2
-(docs/11-gap-analysis.md, section 10). compare_stages.sh runs both steps below.
+(docs/11-gap-analysis.md, section 10). scripts/compare_stages.sh runs both steps below, from the repo root.
 -> eval: run lm_eval_harness/eval_lm_harness.py for one model and task, and also write to OUT_DIR
-   PYTHONPATH=. python compare_stages.py eval OUT_DIR <eval_lm_harness.py arguments>
+   PYTHONPATH=. python scripts/compare_stages.py eval OUT_DIR <eval_lm_harness.py arguments>
    - results.json: the harness results
    - <task>_write_out_info.json: per question, the log-likelihood of each choice, the right answer and acc
    - checkpoints.json: per checkpoint, its SHA-256, stored step and loss, dtypes, and whether every trainable
@@ -11,11 +11,11 @@ Find where the gap starts: the teacher, Lizard after stage 1 and Lizard after st
      feature-map weight sizes (section 6, and factors 0 and 1 of section 12)
 -> summary: compare the models in RUN_DIR/<model>/<task>/, read the training results CSVs in
    RUN_DIR/training/ (if any), and write RUN_DIR/summary.md and summary.json
-   python compare_stages.py summary RUN_DIR
+   python scripts/compare_stages.py summary RUN_DIR
 -> TEMPERATURE=T (default 1) divides the logits by T before the harness takes log_softmax
-   (docs/experiments/temperature.md). temperature.sh runs one RUN_DIR per temperature in ROOT/T=<t>/;
+   (docs/experiments/temperature.md). scripts/temperature.sh runs one RUN_DIR per temperature in ROOT/T=<t>/;
    temperatures compares them and writes ROOT/summary.md and summary.json
-   python compare_stages.py temperatures ROOT
+   python scripts/compare_stages.py temperatures ROOT
 """
 import csv
 import hashlib

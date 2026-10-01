@@ -101,12 +101,14 @@ PYTHONPATH=. python lm_eval_harness/eval_lm_harness.py \
 
 ## Analysis scripts
 
+These scripts are now in `scripts/`. [scripts/README.md](../scripts/README.md) lists them.
+
 ### `letters.py` (commit `baa7b3e`)
 
 The script reads an MMLU log. For each subject, it compares the accuracy with the frequency of each letter as the right answer in the test split of that subject. If a model always gives the same letter, its accuracy on a subject is equal to the frequency of that letter.
 
 ```bash
-python letters.py results/lm_eval/hendrycksTest-5shot-<time>.log
+python scripts/letters.py results/lm_eval/hendrycksTest-5shot-<time>.log
 ```
 
 ### `ablate.py` (commit `ee8b8c4`)
@@ -126,7 +128,7 @@ Each branch alone gives a weighted average of the values. Thus the scale factor 
 RUN=checkpoints/distill_llama3_2_1b_lizard_w128_fd128_m4/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-2_1b-m=distill_llama3_2_1b_lizard_w128_fd128_m4-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0
 ABLATE=no_gla LM_EVALUATION_HARNESS_PATH=../lm-evaluation-harness \
 LM_EVAL_RESULTS_PATH=results/lm_eval/results_lm_eval.csv PYTHONPATH=. \
-python ablate.py --model_type lolcats_ckpt \
+python scripts/ablate.py --model_type lolcats_ckpt \
   --attn_mlp_checkpoint_path ${RUN}_distill.pt --finetune_checkpoint_path ${RUN}-se=0-re=0_ft.pt \
   --cache_dir ~/.cache/huggingface/hub --task piqa --num_shots 0 --no_cache --no_wandb
 ```
