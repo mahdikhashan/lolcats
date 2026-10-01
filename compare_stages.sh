@@ -65,10 +65,13 @@ CKPTS=("$DISTILL_CKPT")
 if [[ " $MODELS " == *" stage2 "* ]]; then CKPTS+=("$FT_CKPT"); fi
 echo "-> Downloading checkpoints from $HF_REPO"
 python - "$HF_REPO" "${CKPTS[@]}" <<'EOF'
-import sys
+import os, sys
 from huggingface_hub import hf_hub_download
 repo_id, *filenames = sys.argv[1:]
 for filename in filenames:
+    if os.path.isfile(filename):  # e.g., trained on this machine with make distill-local
+        print(f'Using the local file {filename}')
+        continue
     print(hf_hub_download(repo_id, filename, local_dir='.'))
 EOF
 

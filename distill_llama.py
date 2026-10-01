@@ -68,6 +68,8 @@ def get_args():
     parser.add_argument("--max_finetune_steps", type=int, default=None)
     parser.add_argument("--no_finetune", action='store_true', default=False,
                         help="Stop after distillation (stage 1). The run name still uses --finetune_config")
+    parser.add_argument("--cache_dir", type=str, default=None,
+                        help="Replaces the model config's cache_dir (/workspace/..., which may not be writable)")
 
     parser.add_argument("--no_peft_grad_ckpt", action='store_true', default=None)
     
@@ -122,6 +124,8 @@ def main():
     model_config_path = join('./configs/model', f'{args.model_config}.yaml')
     model_config = OmegaConf.load(model_config_path)
     model_config = update_model_config_from_args(model_config, args)
+    if args.cache_dir is not None:
+        model_config.model.cache_dir = args.cache_dir
     
     args.run_name = args.run_name.replace('True', '1').replace('False', '0')  # concise hacks
         
