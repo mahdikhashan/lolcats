@@ -1,74 +1,59 @@
 # 1. Lizard in LoLCATs
 
-**Goal:** train Llama-3.2-1B with the Lizard attention from the thesis repository
-(`jku-thesis/lizard_attention.py`) using the LoLCATs two-stage pipeline (attention distillation,
-then LoRA finetuning), and replace the old `run.sh` with a Makefile.
+**Goal:** Train Llama-3.2-1B with the Lizard attention from the thesis repository (`jku-thesis/lizard_attention.py`). Use the two-stage pipeline of LoLCATs: attention distillation first, then LoRA finetuning. Replace the old `run.sh` with a Makefile.
 
-Merged in PR #1 (commit `c2dd4f0`).
+PR #1 (commit `c2dd4f0`) merged this work.
 
-## What was added
+## Added and removed files
 
 | File | Purpose |
 |---|---|
-| `src/model/linear_attention/lizard_attention.py` | The Lizard functions and layer, plus the LoLCATs wrapper and a generation cache |
+| `src/model/linear_attention/lizard_attention.py` | The Lizard functions and layer, the LoLCATs wrapper, and a cache for generation |
 | `src/model/convert_model.py` | Registers the attention type `lolcats_llama_lizard` (in `get_attention`) and its cache (in `get_attention_cache`) |
 | `src/model/linear_attention/__init__.py` | Exports `LolcatsLizardAttention` and `LizardAttentionCache` |
-| `configs/model/distill_llama3_2_1b_lizard_w128_fd128_m4.yaml` | Model config: the same `model:` section as the old `run.sh` config, with a Lizard `attention:` section |
-| `Makefile` | `make lolcats` (the old `run.sh` command) and `make lizard` (same configs, Lizard attention) |
+| `configs/model/distill_llama3_2_1b_lizard_w128_fd128_m4.yaml` | Model config. Its `model:` section is the same as in the old `run.sh` config. Its `attention:` section selects Lizard. |
+| `Makefile` | `make lolcats` runs the old `run.sh` command. `make lizard` runs the same configs with Lizard attention. |
 | `run.sh` | Removed |
 
 ### The Lizard code
 
-The functions `hedgehog`, `window_mask`, `gate_products`, `gla`, `awa` and the class
-`LizardAttention` were copied unchanged from jku-thesis; a byte comparison confirmed they were
-identical at the time. `from_llama` was not copied, because the wrapper builds the layer from the
-original attention module itself. (The functions were changed later by the NaN fix in PR #5; see
-[document 5](05-nan-crash.md).)
+The functions `hedgehog`, `window_mask`, `gate_products`, `gla`, `awa` and the class `LizardAttention` came from jku-thesis without changes. A byte comparison showed that the two copies were identical at that time. The port does not include `from_llama`, because the wrapper builds the layer from the original attention module. Later, the NaN fix of PR #5 changed these functions ([document 5](05-nan-crash.md)).
 
-Per layer, Lizard adds five parameters on top of the teacher's q/k/v/o projections:
+Lizard adds five parameters to each layer. The teacher q/k/v/o projections stay as they are.
 
-| Parameter | Shape | Role |
+| Parameter | Shape | Function |
 |---|---|---|
-| `phi_q`, `phi_k` | Linear 64 → 128 (shared by all heads) | Hedgehog feature maps: φ(x) = [softmax(xW) ⊕ softmax(−xW)], 256 features |
-| `W_gamma` | Linear 2048 → 1, no bias, zero init | Scalar gate per token: γ = sigmoid(W_γ x), so γ = 0.5 at initialization |
-| `meta_tokens` | 4 scalars | Sink logits that appear only in the denominator of the window softmax |
-| `alpha_blend` | 1 scalar, init 1 | Weight of the window branch: y = GLA + α · AWA |
+| `phi_q`, `phi_k` | Linear 64 → 128, shared by all heads | Feature maps: φ(x) = [softmax(xW) ⊕ softmax(−xW)], with 256 features |
+| `W_gamma` | Linear 2048 → 1, no bias, initial value 0 | Gate: one gate value γ = sigmoid(W_γ x) for each token. At initialization, γ = 0.5. |
+| `meta_tokens` | 4 scalars | Sink logits. They appear only in the denominator of the window softmax. |
+| `alpha_blend` | 1 scalar, initial value 1 | α, the weight of the window branch: y = GLA + α · AWA |
 
-That is 18,437 parameters per layer, **294,992 in total** over 16 layers, which matches the
-trainable parameter count reported by the stage 1 run (0.024% of the model).
+Each layer has 18,437 Lizard parameters. The 16 layers have **294,992 in total**. This number is the same as the trainable parameter count that stage 1 reported (0.024% of the model).
 
 ### The LoLCATs wrapper (`LolcatsLizardAttention`)
 
-- **Construction.** It subclasses `LizardAttention`, takes the teacher's `LlamaAttention` as
-  `base_attn`, and reuses its q/k/v/o projection modules, so only the five Lizard parameters are
-  new. The module is moved to the teacher weights' device and dtype.
-- **Distillation mode (`train_attention=True`).** Under `no_grad`, it applies RoPE to q and k and
-  computes the teacher's softmax attention as the target `y_true`. It computes Lizard's output
-  `y_pred`, returns `((None, None), (y_pred, y_true))` as the attention weights for the LoLCATs
-  distillation trainer, and passes `y_true` on to the next layer (teacher forcing).
-- **Student mode.** It computes `gla(...) + alpha * awa(...)` in at least float32 (`upcast`), then
-  casts back to the model dtype (bf16 in training).
-- **Generation.** LoLCATs' sample and final evals call `model.generate(use_cache=True)`, which
-  would give wrong outputs without a proper cache. `LizardAttentionCache` stores, per layer, the
-  gated state of the linear branch (`kv_state` of shape (b, h, f, d) and `k_state`) and the keys
-  and values of the last `window` tokens. The prompt is processed in one dense pass
-  (`lizard_recurrent`, prefill); each new token then uses the recurrent form.
-- **RoPE and masks.** As in the thesis code, Lizard uses no RoPE and ignores padding masks.
+- **Construction.** The wrapper is a subclass of `LizardAttention`. It takes the teacher `LlamaAttention` as `base_attn` and uses its q/k/v/o projection modules again. Thus only the five Lizard parameters are new. The wrapper moves the module to the device and dtype of the teacher weights.
+- **Distillation mode (`train_attention=True`).** Under `no_grad`, the wrapper applies RoPE to q and k. It then calculates the teacher softmax attention as the target `y_true`.
+  - It calculates the Lizard output `y_pred`.
+  - It returns `((None, None), (y_pred, y_true))` in place of the attention weights. The LoLCATs distillation trainer reads these values.
+  - It gives `y_true` to the next layer as its input (teacher forcing).
+- **Student mode.** The wrapper calculates `gla(...) + alpha * awa(...)` in float32 or a more precise dtype (`upcast`). It then casts the result back to the model dtype. In training, the model dtype is bf16.
+- **Generation.** The sample evaluations and the final evaluations of LoLCATs call `model.generate(use_cache=True)`. Without a cache that matches Lizard, the outputs of these calls are wrong.
+  - For each layer, `LizardAttentionCache` keeps the state of the gated branch: `kv_state` with shape (b, h, f, d), and `k_state`.
+  - It also keeps the keys and values of the last `window` tokens.
+  - The wrapper processes the prompt in one dense pass (`lizard_recurrent`, the prefill). After the prefill, it uses the recurrent form for each new token.
+- **RoPE and masks.** Lizard attention uses no RoPE and ignores padding masks. The thesis code does the same.
 
 ## Configuration
 
-`distill_llama3_2_1b_lizard_w128_fd128_m4.yaml`:
+`distill_llama3_2_1b_lizard_w128_fd128_m4.yaml` contains these settings:
 
 - `model:` `meta-llama/Llama-3.2-1B`, bfloat16, `rope_theta: 500000`, `attn_implementation: flash_attention_2`.
-- `attention:` `attention_type: lolcats_llama_lizard`, `feature_dim: 128`, `window_size: 128`,
-  `num_meta: 4`, `softmax_attentions: []` (every layer is replaced), `train_attention: true`,
-  `remove_base_attn: true`. The Lizard sizes come from `jku-thesis/config.py`.
+- `attention:` `attention_type: lolcats_llama_lizard`, `feature_dim: 128`, `window_size: 128`, `num_meta: 4`, `softmax_attentions: []`, `train_attention: true`, `remove_base_attn: true`. The empty `softmax_attentions` list makes Lizard replace every layer. The Lizard sizes come from `jku-thesis/config.py`.
 
-(An intermediate version set `attn_implementation: sdpa` to avoid installing flash-attn, since
-every attention layer is replaced anyway. It was reverted to `flash_attention_2` when training
-was dockerized, as requested; see [document 3](03-infrastructure.md).)
+An intermediate version set `attn_implementation: sdpa`. With that setting, the environment did not need flash-attn, because Lizard replaces every attention layer. When training moved into Docker, the config went back to `flash_attention_2` on request ([document 3](03-infrastructure.md)).
 
-`make lizard` runs (current `main`):
+On the current `main`, `make lizard` runs this command:
 
 ```bash
 python distill_llama.py --model_config distill_llama3_2_1b_lizard_w128_fd128_m4 \
@@ -77,46 +62,33 @@ python distill_llama.py --model_config distill_llama3_2_1b_lizard_w128_fd128_m4 
   --no_init_eval --verbose --seed 0 --replicate 0 $(ARGS)
 ```
 
-The distill and finetune configs are the existing LoLCATs ones, unchanged. `--lk_zero_init` from the
-old command was dropped, because it only applies to the Hedgehog learned kernel of the old config.
-(PR #1 also passed `--eval_config eval_alpaca_clean`; PR #2 removed it together with the final
-evaluation and added `--no_init_eval`.)
+The distill config and the finetune config are the existing LoLCATs configs, with no changes. The new command does not have `--lk_zero_init` from the old command. That flag applies only to the learned Hedgehog kernel of the old config. PR #1 also gave `--eval_config eval_alpaca_clean`. PR #2 removed this flag and the final evaluation, and added `--no_init_eval`.
 
 ## Differences from the jku-thesis pipeline
 
-| Aspect | jku-thesis `train.py` | This LoLCATs setup |
+| Aspect | jku-thesis `train.py` | This LoLCATs configuration |
 |---|---|---|
-| Stage 1 loss | Per-layer summed squared error | LoLCATs: 1000 × mean-squared error on each layer's output before `o_proj` (`mse_factor: 1000`) |
+| Stage 1 loss | Summed squared error for each layer | The LoLCATs loss: 1000 × mean squared error on the output of each layer before `o_proj` (`mse_factor: 1000`) |
 | Cross-entropy distillation term | – | Must stay 0 (`xent_factor: 0`), because Lizard returns no attention weights |
-| Stage 2 trainable parameters | LoRA on q/k/v **and** the Lizard parameters | LoRA on q/k/v/o only; the Lizard parameters are frozen |
-| Precision | float32 | bf16 model; Lizard math upcast to float32 |
-| Hyperparameters | The paper's recipe (see [document 9](09-paper-comparison.md)) | The LoLCATs configs (stage 1 lr 1e-2, stage 2 lr 1e-4, plateau scheduler) |
+| Trainable parameters in stage 2 | LoRA on q/k/v **and** the Lizard parameters | LoRA on q/k/v/o only. The Lizard parameters are frozen. |
+| Precision | float32 | bf16 model. The Lizard calculations upcast to float32. |
+| Hyperparameters | The recipe of the paper ([document 9](09-paper-comparison.md)) | The LoLCATs configs: stage 1 learning rate 1e-2, stage 2 learning rate 1e-4, plateau scheduler |
 
-Keeping the Lizard parameters trainable in stage 2, as the thesis does, is possible by adding
-`trainable_weights: [phi_q, phi_k, W_gamma, meta_tokens, alpha_blend]` under `finetune:` in the
-finetune config. It was left out because the request was to keep the existing configs.
+The thesis code keeps the Lizard parameters trainable in stage 2. LoLCATs can do the same with a new line under `finetune:` in the finetune config: `trainable_weights: [phi_q, phi_k, W_gamma, meta_tokens, alpha_blend]`. PR #1 did not add this line, because the request was to keep the existing configs.
 
-## Tests at the time (CPU, tiny random Llama)
+## Tests at that time (CPU, tiny random Llama)
 
-No GPU was available, so these used a tiny randomly initialized Llama:
+No GPU was available. Thus these tests used a tiny Llama with random weights.
 
-1. In float64, the new layer matched the jku-thesis layer and its `reference.lizard_loop` to below
-   1e-10 (later below 1e-12).
-2. In distillation mode, the target equalled the original model's attention output, and only the
-   five Lizard parameters received gradients.
-3. Generating with the cache gave the same tokens and logits as recomputing the full sequence,
-   including prompts longer than the window and multi-token chunks on an existing cache.
-4. A bf16 forward and backward pass stayed finite.
-5. A simulation of the whole `make lizard` flow (arguments, configs, attention swap, distillation,
-   checkpoint save and reload, LoRA finetuning, generation) ran end to end on the tiny model with
-   synthetic data.
+1. In float64, the new layer matched the jku-thesis layer and its `reference.lizard_loop` with an error less than 1e-10. A later version gave less than 1e-12.
+2. In distillation mode, the target was equal to the attention output of the original model. Only the five Lizard parameters received gradients.
+3. Generation with the cache gave the same tokens and logits as a full recalculation of the sequence. This test included prompts longer than the window, and chunks of more than one token on an existing cache.
+4. A bf16 forward pass and backward pass gave only finite values.
+5. A simulation of the full `make lizard` flow ran from start to end on the tiny model with synthetic data. The flow included the arguments, the configs, the attention swap, distillation, checkpoint save and load, LoRA finetuning and generation.
 
-Two bugs were found and fixed during development:
+The tests found two bugs. Both bugs got a fix during development.
 
-- A float64 mismatch of 8.7e-8 came from `.float()` downcasting float64 inputs. The wrapper now
-  uses `upcast`, which promotes to *at least* float32.
-- `generate(use_cache=False)` crashed with `'DynamicCache' object has no attribute 'kv_states'`.
-  The forward now uses the recurrent path only when it gets a `LizardAttentionCache`.
+- A float64 mismatch of 8.7e-8 came from `.float()`, which changed float64 inputs to float32. The wrapper now uses `upcast`, which gives float32 or a more precise dtype.
+- `generate(use_cache=False)` stopped with the error `'DynamicCache' object has no attribute 'kv_states'`. The forward pass now uses the recurrent path only when it receives a `LizardAttentionCache`.
 
-These tests were extended later with a more complete verification on the merged code; see
-[document 8](08-verification.md).
+[Document 8](08-verification.md) describes more complete checks on the merged code.

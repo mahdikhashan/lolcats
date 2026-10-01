@@ -1,18 +1,12 @@
-# 8. Verifying the attention layer
+# 8. Checks of the attention layer
 
-**Question:** is the poor evaluation result caused by a bug in the attention layer, or by something
-else? This document checks the code that trained and evaluated the model: `main` at the time,
-including the NaN fix from PR #5.
+**Question:** Does a bug in the attention layer cause the poor evaluation results, or does a different problem cause them? This document checks the code that trained and evaluated the model. That code is `main` at that time, with the NaN fix from PR #5.
 
-All checks ran on CPU with PyTorch 2.0.1 and transformers 4.43.1 (the version lolcats pins),
-Python 3.11.
+All checks ran on CPU with PyTorch 2.0.1, transformers 4.43.1 (the version that lolcats pins) and Python 3.11.
 
-## Level 1: the math matches the reference formulas
+## Level 1: the calculations match the reference formulas
 
-jku-thesis has a test suite (`test_lizard.py`) that compares its dense implementation with slow
-loop and recurrent versions of every formula (`reference.py`) in float64, requiring a relative error
-below 1e-10. These tests were pointed at the **lolcats** functions through a small shim module named
-`lizard_attention.py`:
+jku-thesis has a test suite (`test_lizard.py`). It compares the dense implementation of jku-thesis with slow loop and recurrent versions of every formula (`reference.py`). The tests use float64 and require a relative error less than 1e-10. A small shim module with the name `lizard_attention.py` made these tests run against the **lolcats** functions:
 
 ```python
 # Shim: run the jku-thesis tests against the lolcats implementation
@@ -30,26 +24,23 @@ cd lzcheck && LOLCATS_DIR=/path/to/lolcats python -m pytest -q test_lizard.py \
   --deselect test_lizard.py::test_whole_model_logits_unchanged_after_swap
 ```
 
-**Result: 26 passed, 2 deselected.** Covered:
+**Result: 26 passed, 2 deselected.** The tests cover these properties:
 
-- Hedgehog feature maps against their formula; both halves positive and summing to 1.
-- Gated linear attention against the loop formula and the recurrent form; a zero gate keeps only the
-  current token; constant values stay constant.
-- Window attention with sinks against the loop formula; without sinks and with an unbounded window it
-  equals causal softmax; several sinks equal one sink at their logsumexp.
-- No gradient from future tokens in either branch; window gradients only inside the window.
-- Gradients against finite differences; the full layer against the loop formula; causality and batch
-  independence; every Lizard parameter receives a gradient.
+- The feature maps match their formula. Both halves are positive, and each half has a sum of 1.
+- The gated branch matches the loop formula and the recurrent form. A gate of zero keeps only the current token. Constant values stay constant.
+- The window branch with sinks matches the loop formula. Without sinks and with a window of unlimited size, it is equal to causal softmax. More than one sink gives the same result as one sink at their logsumexp.
+- In the two branches, future tokens give no gradient. In the window branch, gradients come only from tokens inside the window.
+- The gradients match finite differences. The full layer matches the loop formula. The layer is causal, and the items in a batch are independent. Every Lizard parameter receives a gradient.
 
-The two deselected tests need a newer transformers than 4.43 (`LlamaRotaryEmbedding(config=...)`);
-the same failure occurs on the thesis's own code in this environment. Level 2 covers what they check.
+The two deselected tests need a transformers version newer than 4.43 (`LlamaRotaryEmbedding(config=...)`). In this environment, the same failure occurs on the original jku-thesis code. Level 2 checks the same behavior that these two tests check.
 
-## Level 2: the LoLCATs wrapper and the model wiring
+## Level 2: the LoLCATs wrapper and the connection into the model
 
-The Level 1 tests don't cover `LolcatsLizardAttention`, the conversion inside a real model, or the
-cached paths used by evaluation and generation. This script checks them inside
-`LolcatsLlamaForCausalLM` on a tiny random Llama in float64, with grouped-query attention (4 query
-heads, 2 key/value heads, as in Llama-3.2), a window of 8 and sequences of 24 tokens:
+The Level 1 tests do not cover three parts: `LolcatsLizardAttention`, the conversion inside a real model, and the cached paths that evaluation and generation use. The script below checks these parts inside `LolcatsLlamaForCausalLM`. It uses a tiny Llama with random weights in float64, with these properties:
+
+- grouped-query attention with 4 query heads and 2 key/value heads, as in Llama-3.2,
+- a window of 8 tokens,
+- sequences of 24 tokens.
 
 ```python
 """
@@ -128,41 +119,34 @@ with torch.no_grad():
 
 | Check | What it covers | Result |
 |---|---|---|
-| 1. Teacher mode | Replacing every attention with Lizard in distillation mode (which outputs softmax attention computed from the layer's own copied projections) must leave the logits unchanged: q/k/v/o copying, GQA head expansion, RoPE, layer mapping | identical |
-| 2. Student mode | The wrapper computes the same as the reference class with the same weights | identical |
-| 3a. Eval path | `use_cache=True` (recurrent prefill, used by lm-eval) vs the plain forward | identical |
-| 3b. Generation | Prefill, then decoding token by token past the window, vs the full forward | identical at logit level |
+| 1. Teacher mode | Lizard replaces every attention layer in distillation mode. In this mode, the layer gives softmax attention from its own copied projections. The logits must not change. This checks the copy of q/k/v/o, the expansion of GQA heads, RoPE and the layer mapping. | Identical |
+| 2. Student mode | The wrapper gives the same result as the reference class with the same weights. | Identical |
+| 3a. Evaluation path | `use_cache=True` (recurrent prefill, which lm-eval uses) against the plain forward pass | Identical |
+| 3b. Generation | Prefill, then decoding token by token beyond the window, against the full forward pass | Identical at the level of the logits |
 
-### Why "identical" and not just "close"
+### Why the results are "identical" and not only "near"
 
-`LolcatsLlamaForCausalLM` casts its logits to float32 (`logits.float()` in
-`src/model/modeling_llama.py`), so model-level comparisons are exact only to float32 precision
-(~1e-7). Checks 1, 2 and 3a run the same operations on both sides and can be bit-identical. Check 3b
-uses different arithmetic (recurrent state updates vs dense matrices), so it was examined further:
+`LolcatsLlamaForCausalLM` casts its logits to float32 (`logits.float()` in `src/model/modeling_llama.py`). Thus comparisons at the model level are exact only to float32 precision (~1e-7). Checks 1, 2 and 3a run the same operations on the two sides, so their results can be identical to the bit. Check 3b uses different arithmetic: recurrent state updates against dense matrices. Thus check 3b got more examination:
 
-- **Inside the model**, layer 0's decode output differs from its dense output by 2.2e-14 on values
-  of about 29.5 (relative ~7.5e-16, float64 rounding). The difference disappears in the float32 logits.
-- **A single layer on its own** gives a decode vs dense difference of 7.8e-16 on values of about 1.1.
-- **The decode path really runs:** it was called 38 times (2 layers × 19 decoded tokens), the cache
-  counted 24 tokens, and the window cache held 8 keys.
-- **Negative control:** decoding each token with an empty cache (no history) gives a relative error
-  of 0.59, so the check does detect a missing history.
+- **Inside the model**, the decode output of layer 0 is different from its dense output by 2.2e-14, on values of approximately 29.5. The relative difference is ~7.5e-16, which is float64 rounding. The difference is not visible in the float32 logits.
+- **One layer alone** gives a difference of 7.8e-16 between decode and dense, on values of approximately 1.1.
+- **The decode path really runs.** It ran 38 times (2 layers × 19 decoded tokens). The cache counted 24 tokens, and the window cache contained 8 keys.
+- **Negative control.** Decoding with an empty cache for each token (no history) gives a relative error of 0.59. Thus the check finds a missing history.
 
-## What these checks do and don't show
+## What these checks show, and what they do not show
 
-- **They show** that the code computes the paper's equations, that the conversion into the model is
-  wired correctly, and that the evaluation and generation paths compute the same function as training.
-- **They don't show** anything about the quality of the trained weights, or behavior at full scale
-  (bf16, 2048-token sequences), beyond the overflow fix in [document 5](05-nan-crash.md).
+- **They show** that the code calculates the equations of the paper. They also show that the conversion connects Lizard attention into the model as intended. The evaluation path and the generation path calculate the same function as training.
+- **They do not show** the quality of the trained weights. They also do not show the behavior at full scale (bf16, 2048-token sequences), except for the overflow fix in [document 5](05-nan-crash.md).
 
-Together with the teacher scoring as expected in the same harness ([document 7](07-results.md)),
-this rules out the attention code, the wiring and the harness as causes of the poor results, and
-leaves the training.
+In the same harness, the teacher gets the expected score ([document 7](07-results.md)). With this result, the checks exclude the attention code, the connection into the model and the harness as causes of the poor results. The remaining cause is the training.
 
 ## Earlier tests (PR #1)
 
-When the layer was first added, similar tests ran on a tiny model: equivalence to the jku-thesis
-layer and `lizard_loop` in float64, the distillation target and gradients, cached generation vs
-recomputation, and a finite bf16 pass ([document 1](01-lizard-in-lolcats.md)). The checks above
-repeat the core of these on the merged code, after the NaN fix, and add the teacher-mode swap and
-the eval path.
+When PR #1 added the layer, similar tests ran on a tiny model ([document 1](01-lizard-in-lolcats.md)). They tested these properties:
+
+- the match with the jku-thesis layer and with `lizard_loop` in float64,
+- the distillation target and the gradients,
+- cached generation against a full recalculation,
+- a bf16 pass with only finite values.
+
+The checks above repeat the core of these tests on the merged code, after the NaN fix. They also add the swap in teacher mode and the evaluation path.
