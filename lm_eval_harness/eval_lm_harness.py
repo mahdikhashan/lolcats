@@ -148,6 +148,9 @@ def main():
     
     args = get_args()
 
+    # Without a finetune checkpoint (teacher, or a stage 1 checkpoint alone) the check below raises,
+    # which would leave these unset and crash the save at the end
+    _RESULTS_PATH, _results_dict = None, None
     try:
         # Save locally
         results_dict = create_new_save_dict(RESULTS_PATH)
