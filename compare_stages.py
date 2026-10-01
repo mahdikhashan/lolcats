@@ -12,6 +12,10 @@ Find where the gap starts: the teacher, Lizard after stage 1 and Lizard after st
 -> summary: compare the models in RUN_DIR/<model>/<task>/, read the training results CSVs in
    RUN_DIR/training/ (if any), and write RUN_DIR/summary.md and summary.json
    python compare_stages.py summary RUN_DIR
+-> TEMPERATURE=T (default 1) divides the logits by T before the harness takes log_softmax
+   (docs/experiments/temperature.md). temperature.sh runs one RUN_DIR per temperature in ROOT/T=<t>/;
+   temperatures compares them and writes ROOT/summary.md and summary.json
+   python compare_stages.py temperatures ROOT
 """
 import csv
 import hashlib
@@ -42,6 +46,7 @@ GATE_TASK = os.environ.get('GATE_TASK', 'hendrycksTest-high_school_us_history') 
 GATE_MAX_TOKENS = 2048
 KEPT_AFTER = (128, 256, 512)  # tokens back from the last token of the prompt
 LETTERS = 'ABCD'
+TEMPERATURE = float(os.environ.get('TEMPERATURE', '1'))
 
 
 def dump(obj, path):
@@ -157,11 +162,26 @@ def run_eval(out_dir, harness_args):
     import src.model.load_model_for_eval as loader
     os.makedirs(out_dir, exist_ok=True)
 
+    if TEMPERATURE != 1:
+        assert TEMPERATURE > 0, f'TEMPERATURE must be positive, got {TEMPERATURE}'
+        # The harness takes log_softmax of what _model_call returns, for every causal model
+        from lm_eval.models.huggingface import AutoCausalLM
+        model_call = AutoCausalLM._model_call
+
+        def scaled_model_call(self, inputs, labels=None):
+            return model_call(self, inputs, labels) / TEMPERATURE
+
+        AutoCausalLM._model_call = scaled_model_call
+        print(f'-> Temperature {TEMPERATURE}: logits divided by it before log_softmax')
+
     simple_evaluate = evaluator.simple_evaluate
 
     def logged_evaluate(**kwargs):
         # Per-question outputs give paired statistics and the answer letters
         results = simple_evaluate(**{**kwargs, 'write_out': True, 'output_base_path': out_dir})
+        results['temperature'] = TEMPERATURE
+        # With one token per answer letter, a temperature cannot change the MMLU prediction
+        results['answer_letter_tokens'] = {l: len(kwargs['model'].tok_encode(f' {l}')) for l in LETTERS}
         dump(results, join(out_dir, 'results.json'))
         return results
 
@@ -190,9 +210,19 @@ def run_eval(out_dir, harness_args):
 
 # --- summary ---
 
+def choice_stats(logits):
+    """Probability mass on the choices, and the confidence and entropy (bits) over the choices"""
+    m = max(logits)
+    p = [math.exp(x - m) for x in logits]
+    p = [x / sum(p) for x in p]
+    return {'mass': sum(math.exp(x) for x in logits), 'confidence': max(p),
+            'entropy_bits': -sum(x * math.log2(x) for x in p if x > 0)}
+
+
 def read_run(run_dir):
     """Score, standard error and per-question results of one model on one task"""
-    results = load(join(run_dir, 'results.json'))['results']
+    harness = load(join(run_dir, 'results.json'))
+    results = harness['results']
     questions = {}
     for f in sorted(os.listdir(run_dir)):
         if f.endswith('_write_out_info.json'):
@@ -205,8 +235,13 @@ def read_run(run_dir):
                     'acc_norm': float(d['acc_norm']) if 'acc_norm' in d else None,
                     'prediction': max(range(len(logits)), key=lambda i: logits[i]),
                     'truth': d['truth'],
+                    'logits': logits,
+                    **choice_stats(logits),
                 }
-    run = {'n': len(questions), 'questions': questions}
+    run = {'n': len(questions), 'questions': questions, 'temperature': harness.get('temperature', 1.0),
+           'answer_letter_tokens': harness.get('answer_letter_tokens')}
+    for stat in ('mass', 'confidence', 'entropy_bits'):
+        run[f'mean_{stat}'] = sum(q[stat] for q in questions.values()) / max(len(questions), 1)
     subjects = [r['acc'] for t, r in results.items() if t.startswith('hendrycksTest-')]
     if subjects:  # The harness MMLU score: unweighted mean over subjects, binomial SE as in docs/07
         run['mmlu'] = True
@@ -271,6 +306,13 @@ def outcome(stage1_drop, stage2_drop, total_drop):
 
 def fmt(x, digits=1, scale=100):
     return '–' if x is None else f'{scale * x:.{digits}f}'
+
+
+def fmt_tokens(tokens):
+    """Tokens per answer letter: one number when all letters agree"""
+    if not tokens:
+        return '–'
+    return str(next(iter(set(tokens.values())))) if len(set(tokens.values())) == 1 else str(tokens)
 
 
 def summarize(run_dir):
@@ -346,7 +388,17 @@ def summarize(run_dir):
                        + f" | {fmt(sum(q['acc'] for q in qs) / len(qs))} | {fmt(always_a)} |")
         truth = Counter(q['truth'] for q in runs[mmlu_models[0]][t]['questions'].values())
         n = sum(truth.values())
-        out += ['', 'Right answers: ' + ', '.join(f'{l} {fmt(truth[i] / n)}%' for i, l in enumerate(LETTERS)), '']
+        out += ['', 'Right answers: ' + ', '.join(f'{l} {fmt(truth[i] / n)}%' for i, l in enumerate(LETTERS)), '',
+                'Choice probabilities, as means over the questions. Mass: the probability of " A" to " D" '
+                'together. Confidence: the largest of the four probabilities after normalization over the '
+                'four letters. Entropy: over the four letters, in bits (maximum 2).', '',
+                '| Model | Temperature | Tokens per letter | Mass | Confidence | Entropy (bits) |',
+                '|---|---|---|---|---|---|']
+        for m in mmlu_models:
+            r = runs[m][t]
+            out.append(f"| {MODELS[m]} | {r['temperature']:g} | {fmt_tokens(r['answer_letter_tokens'])} | "
+                       f"{r['mean_mass']:.3f} | {r['mean_confidence']:.3f} | {r['mean_entropy_bits']:.3f} |")
+        out.append('')
 
     # Checkpoints (sections 3 and 9)
     checks = {f'{m}/{t}': runs[m][t]['checkpoints'] for m in models for t in runs[m] if 'checkpoints' in runs[m][t]}
@@ -424,11 +476,50 @@ def summarize(run_dir):
     print(f'-> Wrote {join(run_dir, "summary.md")} and summary.json')
 
 
+def summarize_temperatures(root):
+    """Compare the MMLU-subset runs in ROOT/T=<t>/ (docs/experiments/temperature.md)"""
+    runs = {}
+    for d in sorted(os.listdir(root)):
+        if d.startswith('T=') and isdir(join(root, d)):
+            for m in MODELS:
+                if isfile(join(root, d, m, 'mmlu_subset', 'results.json')):
+                    runs[(float(d[2:]), m)] = read_run(join(root, d, m, 'mmlu_subset'))
+    rows, out = [], ['# Temperature on the MMLU subset', '',
+                     f'Run directory: `{root}`. Each temperature divides the logits before the harness takes '
+                     'log_softmax. "Changed" counts the questions whose predicted letter differs from the run at '
+                     'temperature 1 of the same model.', '',
+                     '| Temperature | Model | Tokens per letter | Accuracy | "A" | "B" | "C" | "D" | Changed | Mass '
+                     '| Confidence | Entropy (bits) |', '|---' * 12 + '|']
+    for (temperature, m), r in sorted(runs.items(), key=lambda kv: (list(MODELS).index(kv[0][1]), kv[0][0])):
+        qs = r['questions']
+        base = runs.get((1.0, m))
+        changed = sum(qs[q]['prediction'] != base['questions'][q]['prediction']
+                      for q in qs if q in base['questions']) if base else None
+        predicted = Counter(q['prediction'] for q in qs.values())
+        shares = [predicted[i] / len(qs) for i in range(4)]
+        rows.append({'temperature': temperature, 'model': m, 'answer_letter_tokens': r['answer_letter_tokens'],
+                     'acc': r['acc'], 'predicted': dict(zip(LETTERS, shares)), 'changed': changed,
+                     'n': r['n'], **{k: r[f'mean_{k}'] for k in ('mass', 'confidence', 'entropy_bits')}})
+        changed_text = '–' if changed is None else f"{changed} of {r['n']}"
+        out.append(f"| {temperature:g} | {MODELS[m]} | {fmt_tokens(r['answer_letter_tokens'])} | {fmt(r['acc'])} | "
+                   + ' | '.join(fmt(x) for x in shares)
+                   + f" | {changed_text} | {r['mean_mass']:.3f} | {r['mean_confidence']:.3f} | "
+                   f"{r['mean_entropy_bits']:.3f} |")
+    out += ['', 'Prediction: with one token per answer letter, the predicted letters and the accuracy are the same '
+            'at every temperature above 0. Only the mass, the confidence and the entropy change.', '']
+    with open(join(root, 'summary.md'), 'w') as f:
+        f.write('\n'.join(out))
+    dump({'runs': rows}, join(root, 'summary.json'))
+    print(f'-> Wrote {join(root, "summary.md")} and summary.json')
+
+
 if __name__ == '__main__':
     command = sys.argv[1] if len(sys.argv) > 1 else None
     if command == 'eval' and len(sys.argv) > 2:
         run_eval(sys.argv[2], sys.argv[3:])
     elif command == 'summary' and len(sys.argv) == 3:
         summarize(sys.argv[2])
+    elif command == 'temperatures' and len(sys.argv) == 3:
+        summarize_temperatures(sys.argv[2])
     else:
         sys.exit(__doc__)
