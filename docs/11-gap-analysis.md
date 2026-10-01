@@ -9,7 +9,7 @@ This document is a root cause analysis of the gap between the evaluation results
 
 The gap looks **real**. The review does not treat it as mainly a problem of the MMLU evaluation.
 
-Most statements in this document come from the review. A paragraph that starts with **Repository check** gives the result of a check against the code or the other documents. These checks occurred during the writing of this document.
+Sections 1–10, the hypothesis and the debugging sequence come from the review. Sections 11 and 12 come from two later analyses: a guideline to close the gap, and the contribution of each hyperparameter. A paragraph that starts with **Repository check** gives the result of a check against the code or the other documents. These checks occurred during the writing of this document.
 
 ## The gap
 
@@ -396,3 +396,220 @@ Do **not** change the Lizard architecture yet. Examples are a larger window, RoP
 The ablations of the paper show that w = 128, m = 4 is the good configuration. They also show that larger windows can cause a large decrease (Table 7). The default scalar gate is a deliberate choice (Table 4).
 
 Thus the clean reproduction question is now this: **can the existing implementation recover the result of the paper with the recipe of the paper**? This experiment separates a problem in the implementation from a problem in the recipe.
+
+## 11. Guideline to close the gap
+
+### Two facts that shape the plan
+
+- **Batching.** The jku-thesis pipeline packs Alpaca into 2048-token chunks, as lolcats does. Thus both pipelines take approximately 1,178 optimizer steps per stage. The learning rates of the two pipelines are directly comparable.
+- **Configuration options of lolcats**. These settings are already config settings: the cosine schedule with warmup, the AdamW betas, the LoRA targets and trainable Lizard parameters in stage 2. Only gradient clipping needs a code change.
+
+**Update from section 12:** Section 12 found a second necessary code change: float32 storage of the trainable weights. Section 12 puts this change before the new configs.
+
+### Target and principle
+
+**Target** (the paper, Table 9, Llama-3.2-1B): PIQA 74.8, ARC-Easy 65.6, MMLU 29.8. The Lizard model gets 68.0, 54.8 and 23.3.
+
+**Principle:** Change one thing at a time. Check stage 1 before you spend money on stage 2.
+
+### Phase 0: baselines (no training, the A10 is sufficient)
+
+1. **Teacher on PIQA and ARC-Easy** in the harness of this project. Each evaluation takes a few minutes. If time is available, also evaluate the teacher on all MMLU questions. These evaluations give the real target in this configuration, because the paper used a newer harness.
+2. **`gates.py` on the current Lizard model.** It records the gate behavior before any change, for the thesis.
+
+### Phase 1: tools (small PRs, one change each)
+
+| PR | Change | Reason |
+|---|---|---|
+| PR A | Optional gradient clipping in the trainer (`max_grad_norm`, disabled by default) | The paper clips at 1.0. lolcats cannot clip gradients now. |
+| PR B | Two new configs with the recipe of the paper. They have new file names, so that no checkpoint gets overwritten. | See the table below. |
+| PR C | A stage 1 check script. It measures the relative error ‖Ŷ − Y‖² / ‖Y‖² for each layer against the teacher, on held-out text. It compares this error with two reference points: untrained Lizard attention and the window branch alone. It also measures perplexity. | It shows in approximately one hour if stage 1 improved. |
+
+The two configs in PR B:
+
+| | Stage 1 config | Stage 2 config |
+|---|---|---|
+| Learning rate | 1e-3 | 5e-4 |
+| Schedule | `cosine_warmup`, 118 warmup steps of 1,178 | Same as stage 1 |
+| AdamW betas | (0.9, 0.99) | (0.9, 0.99) |
+| Clipping | 1.0 | 1.0 |
+| LoRA | – | r = 8, α = 16, on **q, k, v** (without o) |
+| Lizard parameters in stage 2 | – | **Frozen**, as now |
+
+The reason to keep the Lizard parameters frozen in this run: the paper does not say what it does. A change now would mix two effects. Phase 4 tests it separately.
+
+**Start of a run with the new configs:** `make hf-job` does not give `DISTILL_CONFIG` and `FINETUNE_CONFIG` to the job. Put the configs in `ARGS` instead. There they replace the defaults, because argparse keeps the last value.
+
+```bash
+make hf-job HF_FLAVOR=h200 HF_TIMEOUT=6h ARGS="--distill_config <new_distill> --finetune_config <new_finetune>"
+```
+
+### Phase 2: one full run, but check stage 1 first (H200, approximately 4 h, approximately $19)
+
+- **Check stage 1 while the job continues.** The stage 1 checkpoint reaches the Hub after approximately 50 minutes, and stage 2 continues. On the A10, run the PR C script on this checkpoint and on the current stage 1 checkpoint.
+- **Decision point 1:** If the new stage 1 is **not** clearly better (lower error for each layer, lower perplexity), cancel the job. This saves approximately 3 hours. Then go to Phase 4.
+
+### Phase 3: evaluate the finished model
+
+- **Scores:** First PIQA and ARC-Easy (minutes). Then MMLU with `--limit 20` (1,140 questions, ±1.3, the same questions for every model). Then all MMLU questions.
+- **Letter check:** Run `letters.py` on the log of the full MMLU evaluation. The correlation with one letter should disappear.
+- **Checkpoint path:** In `eval.sh`, set `FT_CKPT` to the name of the full run (`...-bs=1-gas=8-nte=2-ms=-1-se=0-re=0_ft.pt`). The default of `FT_CKPT` is the name for a run of stage 2 only.
+- **Decision point 2, success:** These three conditions are true:
+  - PIQA and ARC-Easy are within approximately 1–2 points of the teacher *in this harness*.
+  - MMLU is clearly above chance (≥ 27).
+  - No single-letter pattern occurs.
+
+  If the model gets there, the recipe was the cause. This is a clean result for the thesis.
+
+**Repository check:** `eval.sh` builds the names of both checkpoints from `DISTILL_CONFIG` and `FINETUNE_CONFIG` (lines 15–24). Thus, for a run with the new configs, also set these two variables to the new config names.
+
+### Phase 4: if a gap remains, try these steps in this sequence (least expensive first)
+
+1. **Stage 2 with trainable Lizard parameters,** as the jku-thesis `train.py` does. This is one config line: `trainable_weights: [phi_q, phi_k, W_gamma, meta_tokens, alpha_blend]`.
+2. **A sweep of the stage 1 learning rate.** The paper did a sweep over {1e-2, 5e-3, 1e-3, 5e-4, 1e-4} (Appendix B). Run stage 1 only for 2–3 values, and compare them with the PR C script. Each value costs approximately 50 minutes.
+3. **A cross-check with the jku-thesis `train.py`.** It is an independent implementation of the recipe of the paper. If it gets the values of the paper and lolcats does not, compare the two pipelines:
+   - the prompt template (`format_example` against the Alpaca format of LoLCATs),
+   - the end-of-sequence tokens,
+   - the tokens that count in the loss,
+   - float32 against bf16.
+4. **Only then consider architecture changes.** Check them against the ablations of the paper first (Tables 4, 6 and 7). At that point, they are a thesis contribution, not a fix.
+
+**Expectation:** At 1B, even the Lizard model of the paper is only a little above chance on MMLU (29.8, against 31.0 for the teacher). The recovery will show most clearly on PIQA and ARC-Easy.
+
+## 12. Contribution of each hyperparameter to the gap
+
+**The gap:** PIQA −6.8, ARC-Easy −10.8 and MMLU −6.5 points below the Lizard 1B model of the paper. The damage is wide, and the checks found no error in the code. Thus the cause is on the training side.
+
+A measurement changes the picture. The precision of the stored trainable weights decides if a learning rate works at all. Thus this section starts with the precision, and then examines each hyperparameter. Documents 1–10 do not describe this finding.
+
+### Factor 0: weight precision (not in the recipe table, but it controls every learning rate)
+
+The master weights are the stored copy of the trainable weights that the optimizer updates.
+
+**Measured:**
+
+- **No float32 master weights.** The lolcats trainer has no mixed precision: no autocast, and no float32 master copy of the weights. The Lizard parameters change to bf16 when the code builds the layer (`lizard_attention.py:149`).
+- **LoRA is also bf16.** PEFT 0.9.0 casts the LoRA weights to the bf16 dtype of the base layer (`peft/tuners/lora/layer.py:118`).
+- **The checkpoints agree:** 2.16 bytes per parameter in stage 1, and 2.05 in stage 2.
+
+bf16 keeps only approximately 3 significant digits. An AdamW step moves each weight by approximately `lr × m/√v`. If the step is smaller than half the distance between neighboring bf16 numbers near the weight value, rounding discards it. The table shows the fraction of updates that rounding discards.
+
+| Weights | Step (`m/√v`) | lr 1e-2 | 1e-3 | 5e-4 | 1e-4 |
+|---|---|---|---|---|---|
+| `alpha_blend` = 1.0 | Any | 0% | **100%** | **100%** | **100%** |
+| φ weights after growth (~0.2) | Noisy (0.3) | 0% | 53% | 76% | 97% |
+| LoRA A at initialization (±0.022) | Noisy (0.3) | 0% | 0% | 0% | **65%** |
+| LoRA B after growth (~0.01) | Noisy (0.3) | 0% | 0% | 0% | **43%** |
+
+**Consequences:**
+
+- **Stage 1 at learning rate 1e-2 has no loss from rounding.** Rounding discards no updates. This is probably one reason for the high rate in the LoLCATs configs.
+- **Stage 2 at learning rate 1e-4 loses approximately half of the noisy LoRA updates**. Thus LoRA learns even more slowly than its low rate suggests.
+- **A change to the learning rates of the paper without float32 weights could make the results worse.**
+  - At 1e-3, `alpha_blend` cannot change at all, and grown φ weights lose up to half of their updates.
+  - The late part of a cosine schedule (down to 0.1×) would lose all of its updates.
+  - The paper trained with FSDP-2. Its "bf16" most probably means the compute precision, with float32 master weights (standard for FSDP). But the paper does not say so explicitly.
+- **The moment estimates of the optimizer are also bf16,** because the optimizer creates them with the dtype of the weights. This is a second loss of precision.
+
+**Probable contribution:** large in stage 2, and a precondition for any change to the learning rate.
+
+**Fix:** Keep the approximately 2M trainable parameters (Lizard parameters and LoRA) in float32, and keep the frozen model in bf16. This is a small code change. PEFT already casts the inputs to the LoRA dtype, and only `W_gamma` needs a cast of its input.
+
+### Factor 1: stage 1 learning rate, 1e-2 against 1e-3 in the paper (10×)
+
+- **Mechanism.** Adam moves each weight by approximately `lr` per step, independent of the gradient size. At a constant 1e-2 for 1,178 steps, a weight with an initial value of ~0.02 can drift by up to approximately 12. At 1e-3 with cosine decay, the maximum is approximately 0.6.
+- **Three probable failure modes:**
+  - **(a) The feature maps saturate.** With large φ weights, softmax(qW) becomes almost one-hot. The kernel loses its smoothness, and its gradients vanish.
+  - **(b) The gate saturates.** With a large W_γ, γ = σ(W_γ x) stays near 0 or 1. Then the model loses the decay pattern, which is the only source of position information in Lizard attention.
+  - **(c) The sink logits drift** until they take almost all of the attention, or none.
+- **Evidence so far.** Stage 1 did learn: stage 2 started at perplexity 233, against 7,207 after the 10 steps of Run 0. Also, the disabled-branch evaluation shows that the gated branch is active. Thus the gated branch is not dead, but it may be partly saturated.
+- **Testable prediction.** `gates.py` should show γ near 0 or 1 in many layers, with little variation from token to token.
+- **Probable contribution:** medium to large. The quality of stage 1 limits all later results.
+
+### Factor 2: schedule and warmup, constant without warmup against cosine with 10% warmup
+
+- **No warmup.** With bias correction, the first Adam steps have full size (`m/√v ≈ ±1`) on new weights. Together with 1e-2, saturation most probably starts here.
+- **No decay.** ReduceLROnPlateau with patience 10 evaluations gives at most one reduction in 1,178 steps. Thus the rate is almost constant. The final weights stay at the noise level of 1e-2 and do not settle. The selection of the best checkpoint by validation loss compensates only partly.
+- **Probable contribution:** medium, mainly through stage 1. It amplifies factor 1.
+
+### Factor 3: stage 2 learning rate, 1e-4 against 5e-4 in the paper (5×)
+
+- **Mechanism.** In stage 2, only the LoRA adapters adapt the model to its new attention. A rate 5× lower, plus the bf16 losses of factor 0, makes the effective rate much lower still. The result is a model that did not fully adapt.
+- **Evidence.** The model has damage even on short prompts. In Run 1, the training perplexity was still approximately 12–21 at step 386.
+- **Check:** Compare the final stage 2 validation loss of Run 2 with the loss of the teacher on the same validation data. A large difference supports this factor.
+- **Probable contribution:** large.
+
+### Factor 4: Lizard parameters frozen in stage 2 (no information in the paper, trainable in jku-thesis)
+
+- **Mechanism.** In stage 1, each layer learns from the inputs of the teacher (teacher forcing). In the model with Lizard attention, the inputs of a layer come from earlier Lizard layers. Thus the errors accumulate. End-to-end training of φ, γ, the sinks and α lets them adapt to this shift.
+- **Probable contribution:** medium. Test it separately, after the recipe run. It needs the fix of factor 0, because at 5e-4 in bf16, rounding discards part of the φ updates.
+
+### Factor 5: gradient clipping, none against 1.0
+
+- **Mechanism.** With Adam, clipping is important mainly at spikes.
+  - One very large gradient inflates the moment estimates. This causes one large step, then a long series of damped steps.
+  - √v stays inflated for approximately 1/(1−β₂) steps. Clipping limits this effect.
+  - Clipping does not prevent the `exp` overflow, which has a fix now. But it limits the spikes that can cause an overflow.
+- **Evidence:** none in either direction. The stage 2 metrics never reached W&B, and the trainer does not log the gradient norm.
+- **Probable contribution:** small to medium, mainly for stability.
+
+### Factor 6: AdamW β₂, 0.999 against 0.99 in the paper
+
+- **Mechanism.** β₂ sets the number of steps that the second-moment estimate averages over: approximately 1,000 against 100. The run has only 1,178 steps, and the gradient scale changes as the feature maps sharpen. Thus 0.999 lags. When the gradients decrease, the steps become too small. When the gradients increase, the steps become too large.
+- **Probable contribution:** small alone, larger at learning rate 1e-2.
+
+### Factor 7: LoRA targets, q, k, v, o against q, k, v in the paper
+
+- **Mechanism.** The o target adds approximately 0.5M parameters of capacity. This is unlikely to *cause* a deficit. Table 8 of the paper shows little sensitivity to LoRA capacity (59.2–61.2 for ranks 4–64).
+- **Probable contribution:** negligible. Change to q, k, v anyway, to match the paper.
+
+### Factor 8: stage 1 loss scale, 1000 × mean MSE against summed squared error
+
+- **Mechanism.** A constant scale factor on the loss has no effect on Adam (eps = 1e-8 is negligible here). Both forms give the layers equal weights.
+- **Probable contribution:** none.
+
+**Note:** This factor covers only loss forms that differ by a constant factor. Section 7 also lists the relative MSE, which is not such a form.
+
+### Factor 9: checkpoint selection (not in the paper)
+
+- **Mechanism.** Both stages keep the checkpoint with the best validation loss, and load it again at the end. The validation runs every 100 steps on 200 examples (approximately 20 sequences). If the validation is noisy, an early checkpoint can win.
+- **Check (takes seconds):**
+
+  ```python
+  import torch
+  for f in ['<..._distill.pt>', '<...-se=0-re=0-se=0-re=0_ft.pt>']:
+      c = torch.load(f, map_location='cpu'); print(f[-40:], 'step', c['step'], {k: v for k, v in c.items() if 'loss' in k})
+  ```
+
+  If the stored step is far below 1,178, the evaluated model is an early checkpoint.
+- **Probable contribution:** unknown until the check runs.
+
+### Settings with no contribution
+
+These settings match the paper: the data, the token count, the batch size and the sequence length. The window, the feature dimension and the number of sinks also match. A different seed changes PIQA by approximately one point at most, not by 7 points.
+
+**Note:** Section 5 lists the data and the packing as a possible cause. The two sections disagree on this point. The checks in section 5 can decide it.
+
+### Summary
+
+| # | Factor | Stage | Probable size | Evidence so far | Least expensive test |
+|---|---|---|---|---|---|
+| 0 | bf16 master weights | Both stages | **Large** in stage 2. A precondition for factors 1–3. | Measured: rounding discards 43–65% of the LoRA updates at 1e-4. α is frozen at ≤ 1e-3. | Code change, then a stage 1 comparison |
+| 3 | Stage 2 learning rate 5× lower | Stage 2 | **Large** | Wide damage. Training perplexity still ~12–21 at step 386. | Validation loss of the Lizard model against the teacher |
+| 1 | Stage 1 learning rate 10× higher | Stage 1 | Medium to large | Stage 1 learned, but may be saturated. | `gates.py`, error for each layer |
+| 2 | No warmup, no decay | Mainly stage 1 | Medium | The plateau scheduler is almost constant. | Error for each layer |
+| 4 | Lizard parameters frozen in stage 2 | Stage 2 | Medium | – | Separate run |
+| 9 | Selection of the best checkpoint | Both stages | Unknown | – | Stored `step` (seconds) |
+| 5 | No clipping | Both stages | Small to medium | – | Log the gradient norm |
+| 6 | β₂ 0.999 | Both stages | Small | – | – |
+| 7 | LoRA also on o | Stage 2 | Negligible | Table 8 of the paper | – |
+| 8 | Loss scale | Stage 1 | None | Adam does not change with the loss scale. | – |
+
+### Changes to the plan in section 11
+
+1. **Keep the trainable parameters in float32 before a run with the learning rates of the paper**. Without this change, a stage 1 rate of 1e-3 could make the results worse, and the comparison would mix two effects. This change becomes its own PR, before the configs of PR B.
+2. **Separate the causes with an inexpensive experiment on stage 1 only.**
+   - Run a 2 × 2 grid: {bf16, float32} weights × {current recipe, recipe of the paper}.
+   - Each run takes approximately 50 minutes on the H200. Compare the runs with the PR C script.
+   - For the thesis, this shows how much of the stage 1 gap comes from precision, and how much from the recipe. It gives this result before any stage 2 run.
+3. **Two checks that can run now:** the stored checkpoint step (factor 9), and `gates.py` (the prediction of factor 1).
