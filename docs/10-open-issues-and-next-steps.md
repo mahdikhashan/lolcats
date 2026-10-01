@@ -1,85 +1,77 @@
 # 10. Open issues and next steps
 
-## Known code issues (not fixed)
+## Known code issues (no fix yet)
 
-| Issue | Where | Effect | Possible fix |
+| Issue | Location | Effect | Possible fix |
 |---|---|---|---|
-| `breakpoint()` after a failed backward, inside anomaly detection | `src/trainer/default_lm.py`, `train_step` | Any NaN in a non-interactive job stops it with `bdb.BdbQuit` | Remove, or skip the batch and log it |
-| No gradient clipping | `src/trainer/default_lm.py` | Differs from the paper (clipping 1.0); no protection against loss spikes | Optional `max_grad_norm` in the trainer config (was in the first version of PR #5, removed on request) |
-| W&B step counter restarts at 0 in stage 2 | `default_lm.py`, `wandb.log(..., step=self.grad_step)` | All stage 2 metrics are dropped by W&B | Let W&B count steps and log `train/step` as a metric |
-| MMLU recorded as 0 in the eval results CSV | `lm_eval_harness/eval_lm_harness.py`, `save_results_to_dict` uses a variable local to `main()` | CSV is wrong for MMLU; the printed `MMLU RESULT` line is correct | Pass the MMLU accuracies into the function |
-| Full logits copied to CPU every step in stage 2 | `default_lm.py` (`outputs.cpu()`) | Stage 2 about twice as slow as estimated | Remove the copy |
-| Eval script default W&B entity `hazy-research` | `eval_lm_harness.py` | W&B fails unless `--no_wandb` | Use the default entity, as in PR #4 |
+| `breakpoint()` after a failed backward pass, inside anomaly detection | `src/trainer/default_lm.py`, `train_step` | A NaN in a job without an interactive terminal stops the job with `bdb.BdbQuit`. | Remove it, or skip the batch and write it to the log. |
+| No gradient clipping | `src/trainer/default_lm.py` | Different from the paper (clipping 1.0). No protection against loss spikes. | An optional `max_grad_norm` in the trainer config. The first version of PR #5 had it. The PR removed it on request. |
+| The W&B step counter starts again at 0 in stage 2 | `default_lm.py`, `wandb.log(..., step=self.grad_step)` | W&B ignores all stage 2 metrics. | Let W&B count the steps, and log `train/step` as a metric. |
+| The evaluation results CSV records MMLU as 0 | `lm_eval_harness/eval_lm_harness.py`: `save_results_to_dict` uses a local variable of `main()` | The CSV value for MMLU is wrong. The printed `MMLU RESULT` line is right. | Give the MMLU accuracies to the function as an argument. |
+| Stage 2 copies the full logits to the CPU at every step | `default_lm.py` (`outputs.cpu()`) | Stage 2 takes approximately two times the estimated time. | Remove the copy. |
+| The default W&B entity of the evaluation script is `hazy-research` | `eval_lm_harness.py` | W&B fails without `--no_wandb`. | Use the default entity, as in PR #4. |
 
-## Measurements still missing
+## Missing measurements
 
-1. **Teacher on PIQA and ARC-Easy in the same harness**, for the exact gap (the paper used a newer
-   harness). Command: the teacher command in [document 6](06-evaluation-setup.md) with
-   `--task piqa` / `--task arc_easy` and `--num_shots 0`, without `--limit`.
-2. **Teacher on full MMLU**, and `letters.py` on its log. The teacher should show no strong
-   correlation with any single letter, which contrasts with Lizard's constant answer.
-3. **Gate statistics** with `gates.py` ([document 6](06-evaluation-setup.md)): how much the gated
-   branch keeps beyond the window.
-4. **Stage 2 validation loss of Run 2**, from its results CSV on the Hub.
-5. Optionally the remaining paper tasks: ARC-Challenge (acc_norm), HellaSwag (acc_norm), WinoGrande (acc).
+1. **The teacher on PIQA and ARC-Easy in the same harness.** This gives the exact gap, because the paper used a newer harness. Use the teacher command in [document 6](06-evaluation-setup.md) with `--task piqa` or `--task arc_easy`, with `--num_shots 0`, and without `--limit`.
+2. **The teacher on all MMLU questions**, and `letters.py` on its log. The teacher should show no strong correlation with one letter. This would be different from the constant answer of the Lizard model.
+3. **Gate statistics** with `gates.py` ([document 6](06-evaluation-setup.md)). They show how much information the gated branch keeps from tokens beyond the window.
+4. **The stage 2 validation loss of Run 2**, from its results CSV on the Hub.
+5. Optional: the remaining tasks of the paper. These are ARC-Challenge (normalized accuracy), HellaSwag (normalized accuracy) and WinoGrande (accuracy).
 
 ## Main hypothesis and the controlled test
 
-**Hypothesis:** the gap to the paper comes from the training recipe, mainly stage 1
-([document 9](09-paper-comparison.md)).
+**Hypothesis:** The recipe causes the gap to the paper, mainly the recipe of stage 1 ([document 9](09-paper-comparison.md)).
 
 **Evidence so far:**
 
-- The attention math and the wiring are verified ([document 8](08-verification.md)).
-- The harness works: the teacher scores 33.7 on the 285-question subset, near the paper's 31.0.
-- Both branches are active (branch removal on PIQA), so no component is missing or dead.
-- The model is degraded broadly (PIQA −7, ARC-Easy −11 points against the paper), not only on MMLU.
-- The recipe differs from the paper in stage 1 learning rate (10×), schedule, warmup and clipping.
+- The checks found no error in the attention calculations or in the connection into the model ([document 8](08-verification.md)).
+- The harness works. The teacher gets 33.7 on the MMLU subset (285 questions), near the paper value of 31.0.
+- Both branches are active (disabled branches on PIQA). Thus no component is missing or inactive.
+- The damage to the model is wide, not only on MMLU. Against the paper, PIQA is 7 points lower and ARC-Easy is 11 points lower.
+- The recipe is different from the paper in four settings: the stage 1 learning rate (10×), the schedule, the warmup and the clipping.
 
-**Controlled test:** change only the recipe, keep the code, data and seed.
+**Controlled test:** Change only the recipe. Keep the code, the data and the seed.
 
-1. **Stage 1 with the paper's recipe.** In lolcats this needs a new distill config: `lr: 1e-3`,
-   `lr_scheduler_type: cosine_warmup` with `num_warmup_steps: 118` and `num_training_steps: 1178`
-   (2 epochs × 4,714 sequences ÷ 8), and `betas: [0.9, 0.99]` under `optimizer`; plus gradient
-   clipping at 1.0 in the trainer. (HF's cosine schedule decays to 0 rather than 0.1×; a small
-   difference at the end.) Use a new config file name so the checkpoints don't overwrite the
-   current ones.
-2. **Compare stage 1 before spending time on stage 2**, on held-out text:
-   - per-layer relative error ‖Ŷ − Y‖² / ‖Y‖² between Lizard and teacher attention outputs, for the
-     current and the new stage 1;
-   - two reference points that need no training: Lizard at initialization, and the window branch
-     alone (no gated branch). A well-trained stage 1 should be far below both;
-   - perplexity of the model with Lizard swapped in, against the teacher.
-3. **Stage 2 with the paper's recipe** (lr 5e-4, cosine with 10% warmup, clipping 1.0, LoRA on q/k/v),
-   and decide whether to keep the Lizard parameters trainable, as jku-thesis does (in lolcats:
-   `trainable_weights: [phi_q, phi_k, W_gamma, meta_tokens, alpha_blend]` under `finetune:`).
-4. **Evaluate** MMLU with `--limit 20` (1,140 questions, about ±1.3 points, the same questions for
-   every model), PIQA and ARC-Easy, then full MMLU for the final model.
-   Targets from the paper: PIQA ~74, ARC-Easy ~65, MMLU ~30.
+1. **Stage 1 with the recipe of the paper.** In lolcats, this needs a new distill config with these settings:
+   - `lr: 1e-3`,
+   - `lr_scheduler_type: cosine_warmup` with `num_warmup_steps: 118` and `num_training_steps: 1178` (2 epochs × 4,714 sequences ÷ 8),
+   - `betas: [0.9, 0.99]` under `optimizer`,
+   - gradient clipping at 1.0 in the trainer.
 
-**Reading the outcome:**
+   The cosine schedule of HF decays to 0, not to 0.1×. This is a small difference at the end of the schedule. Give the new config file a new name, so that its checkpoints do not overwrite the current checkpoints.
+2. **Compare the two stage 1 results before stage 2 starts.** Use held-out text for these measurements:
+   - The relative error for each layer, ‖Ŷ − Y‖² / ‖Y‖², between the outputs of Lizard attention and teacher attention. Measure it for the current stage 1 and for the new stage 1.
+   - Two reference points that need no training: Lizard attention at initialization, and the window branch alone (no gated branch). A well-trained stage 1 should be far below both.
+   - The perplexity of the model with Lizard attention, against the perplexity of the teacher.
+3. **Stage 2 with the recipe of the paper:** learning rate 5e-4, cosine schedule with 10% warmup, clipping at 1.0, LoRA on q/k/v. Also decide if the Lizard parameters stay trainable, as in jku-thesis. In lolcats, this needs `trainable_weights: [phi_q, phi_k, W_gamma, meta_tokens, alpha_blend]` under `finetune:`.
+4. **Evaluate** these tasks:
+   - MMLU with `--limit 20`: 1,140 questions, approximately ±1.3 points, the same questions for every model,
+   - PIQA and ARC-Easy,
+   - then all MMLU questions for the final model.
+
+   The targets from the paper are PIQA ~74, ARC-Easy ~65 and MMLU ~30.
+
+**How to read the outcome:**
 
 | Outcome | Conclusion |
 |---|---|
-| New stage 1 has clearly lower per-layer error, and the final model approaches the paper's numbers | The recipe was the cause |
-| New stage 1 is not better | Look at data and sequence handling next (e.g., how LoLCATs concatenates and chunks Alpaca, the loss normalization) |
-| Stage 1 is better but the final model isn't | Look at stage 2 (learning rate, trainable Lizard parameters) |
+| The new stage 1 has a clearly lower error for each layer, and the final model gets near the values of the paper. | The recipe was the cause. |
+| The new stage 1 is not better. | Examine the data and the sequence handling next: for example, how LoLCATs concatenates and chunks Alpaca, and how it normalizes the loss. |
+| Stage 1 is better, but the final model is not better. | Examine stage 2: the learning rate and the trainable Lizard parameters. |
 
-## Other options discussed
+## Other options from the discussion
 
-- Use the jku-thesis `train.py` directly, which already follows the paper's recipe, instead of new
-  lolcats configs.
-- A hybrid variant that keeps some softmax layers (`softmax_attentions` in the model config), to
-  bound what the linearized layers cost; the paper's Table 10 reports 62.8 MMLU with 25% softmax
-  layers kept on Llama-3-8B, and 65.1 with 50%.
+- Use the jku-thesis `train.py` directly, in place of new lolcats configs. It already uses the recipe of the paper.
+- A hybrid variant that keeps some softmax layers (`softmax_attentions` in the model config). It limits the cost of the linearized layers. Table 10 of the paper reports these MMLU values on Llama-3-8B: 62.8 with 25% of the softmax layers kept, and 65.1 with 50%.
 
-## Reproducing the current results
+## How to reproduce the current results
 
-1. Checkpoints: `nanoman1/lolcats-lizard-llama-3.2-1b` (stage 1 `...-s=0-se=0-re=0_distill.pt`,
-   stage 2 `...-s=0-se=0-re=0-se=0-re=0_ft.pt`; see [document 3](03-infrastructure.md)).
+1. Checkpoints: `nanoman1/lolcats-lizard-llama-3.2-1b`. The stage 1 file is `...-s=0-se=0-re=0_distill.pt`. The stage 2 file is `...-s=0-se=0-re=0-se=0-re=0_ft.pt`. [Document 3](03-infrastructure.md) gives the full names.
 2. Environment: `CONDA_OVERRIDE_CUDA=12.4 conda env create -f environment.yaml`.
-3. Evaluation: `./eval.sh` (MMLU), `TASK=piqa NUM_SHOTS=0 ./eval.sh`,
-   `TASK=arc_easy NUM_SHOTS=0 ./eval.sh`; `letters.py` and `ablate.py` as in
-   [document 6](06-evaluation-setup.md).
-4. Training from scratch: `make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=<repo> HF_FLAVOR=h200 HF_TIMEOUT=6h`
-   with the Docker image built from `main` ([document 3](03-infrastructure.md)).
+3. Evaluation:
+   - `./eval.sh` (MMLU),
+   - `TASK=piqa NUM_SHOTS=0 ./eval.sh`,
+   - `TASK=arc_easy NUM_SHOTS=0 ./eval.sh`,
+   - `letters.py` and `ablate.py` as in [document 6](06-evaluation-setup.md).
+4. Training from the start: `make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=<repo> HF_FLAVOR=h200 HF_TIMEOUT=6h`. Use a Docker image built from `main` ([document 3](03-infrastructure.md)).
