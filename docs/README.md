@@ -33,7 +33,7 @@ Each experiment has its own document in `experiments/`, with its method, its run
 | [Stage difference](experiments/stage-difference.md) | Does the gap start in stage 1 or in stage 2? Section 10 of the gap analysis. | Two quick checks done: stage 1 on PIQA, and stages 1 and 2 on the MMLU subset. Both point to stage 1. The full run with the teacher is not done yet. |
 | [XAI for the distillation](experiments/xai.md) | Which interpretability methods can show if the distillation works, if the new parameters learn, and if the layers match the teacher? | Ideas only. Nothing has run yet. |
 | [Temperature on the MMLU subset](experiments/temperature.md) | Does the temperature change the MMLU-subset accuracy after stage 1 and after stage 2? | Run 1 done (stage 1 at T = 0.1, 0.5, 1 and 2): the accuracy does not change, as predicted. Stage 2 not run yet. |
-| [Feature dimension 32 in stage 1](experiments/feature-dimension.md) | Does a feature dimension of 32 (the LoLCATs rule) give a better stage 1 than 128? | Config and tools ready and tested on CPU. Stage 1 not trained yet. |
+| [Feature dimension 32 in stage 1](experiments/feature-dimension.md) | Does a feature dimension of 32 (the LoLCATs rule) give a better stage 1 than 128? | Stage 1 trained. MMLU subset: 23.2 against 22.5 for 128, with a higher validation loss (3.42 against 3.25) and the same gate saturation. Not a cause of the gap. PIQA not run yet. |
 
 ## Glossary
 
