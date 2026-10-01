@@ -45,11 +45,11 @@ Here z_c is the logit of letter c, and the sum runs over the full vocabulary.
 | Models | B. Lizard model after stage 1, without LoRA. C. Lizard model after stage 2. |
 | Task | MMLU subset (5-shot, 5 questions per subject, 285 questions) |
 | Temperatures | 0.1, 0.5, 1 and 2 by default. T = 1 is the reference. |
-| Tool | `temperature.sh`, which runs `compare_stages.sh` once for each temperature |
+| Tool | `scripts/temperature.sh`, which runs `scripts/compare_stages.sh` once for each temperature |
 
 ```bash
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 ./temperature.sh   # all temperatures, models B and C
-TEMPERATURES="0.1 1" MODELS=stage2 ./temperature.sh                     # a part of it
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 scripts/temperature.sh   # all temperatures, models B and C
+TEMPERATURES="0.1 1" MODELS=stage2 scripts/temperature.sh                     # a part of it
 ```
 
 The full run has 8 evaluations of the MMLU subset (4 temperatures × 2 models). It probably takes 40–60 minutes on the A10. This value is an estimate from the earlier runs on the MMLU subset.
@@ -84,7 +84,7 @@ If a check fails:
   - The environment variable `TEMPERATURE` (default 1) sets the temperature.
   - `results.json` records the temperature and the number of tokens of each answer letter.
   - `summary.md` has a new table with the choice probabilities (mass, confidence and entropy) for MMLU runs.
-  - A new step, `python compare_stages.py temperatures ROOT`, compares the runs in `ROOT/T=<t>/`.
+  - A new step, `python scripts/compare_stages.py temperatures ROOT`, compares the runs in `ROOT/T=<t>/`.
 - `compare_stages.sh`: `env.txt` records the temperature.
 - `temperature.sh`: new.
 
@@ -144,8 +144,8 @@ Each answer letter is one token.
 
 ### Open items
 
-1. **Stage 2 model:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODELS=stage2 ./temperature.sh`.
-2. **Teacher at T = 1:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODELS=teacher TEMPERATURES=1 ./temperature.sh`. It gives the mass, the confidence and the entropy of the teacher, for a comparison with findings 2 and 3.
+1. **Stage 2 model:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODELS=stage2 scripts/temperature.sh`.
+2. **Teacher at T = 1:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODELS=teacher TEMPERATURES=1 scripts/temperature.sh`. It gives the mass, the confidence and the entropy of the teacher, for a comparison with findings 2 and 3.
 
 ### Appendix: summary.md of run 1
 

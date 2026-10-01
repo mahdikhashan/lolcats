@@ -6,14 +6,15 @@
 # -> One-time setup: CONDA_OVERRIDE_CUDA=12.4 conda env create -f environment.yaml
 # -> conda activate lolcats-env
 # -> export HF_TOKEN=<token with access to HF_REPO and meta-llama/Llama-3.2-1B>
-# -> ./compare_stages.sh                                    # 3 models x 3 tasks
-# -> MODELS="stage1 stage2" TASKS=piqa ./compare_stages.sh   # a part of it (TASKS can also include mmlu, all questions)
-# -> TEMPERATURE=0.5 ./compare_stages.sh                    # logits divided by 0.5 (see temperature.sh)
+# -> scripts/compare_stages.sh                                    # 3 models x 3 tasks
+# -> MODELS="stage1 stage2" TASKS=piqa scripts/compare_stages.sh   # a part of it (TASKS can also include mmlu, all questions)
+# -> TEMPERATURE=0.5 scripts/compare_stages.sh                    # logits divided by 0.5 (see scripts/temperature.sh)
+# Paths below (OUT_DIR, checkpoints/, results/) are relative to the repo root; the script runs from there
 # Writes OUT_DIR (default results/stages/<time>): env.txt, summary.md, summary.json, training/ with the
 # training results CSVs from HF_REPO, and <model>/<task>/ with eval.log and the logs of compare_stages.py
 # Override any variable below from the environment
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 HF_REPO=${HF_REPO:-nanoman1/lolcats-lizard-llama-3.2-1b}
 MODEL_CONFIG=${MODEL_CONFIG:-distill_llama3_2_1b_lizard_w128_fd128_m4}
@@ -41,7 +42,7 @@ CACHE_DIR=${CACHE_DIR:-${HF_HUB_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}/hub}
 
 echo '-> Checking the Python environment'
 if ! python -c 'import torch, transformers, peft' 2>/dev/null; then
-  echo 'Run this inside the lolcats-env conda env (see the top of compare_stages.sh)'
+  echo 'Run this inside the lolcats-env conda env (see the top of scripts/compare_stages.sh)'
   exit 1
 fi
 python -c 'import torch; assert torch.cuda.is_available(), "PyTorch does not see a GPU"'
@@ -123,11 +124,11 @@ for model in $MODELS; do
     mkdir -p "$RUN_DIR"
     echo "-> Evaluating $model on $task, logging to $RUN_DIR/eval.log"
     LM_EVALUATION_HARNESS_PATH=$LM_EVAL_DIR LM_EVAL_RESULTS_PATH=$OUT_DIR/results_lm_eval.csv \
-    PYTHONPATH=.${PYTHONPATH:+:$PYTHONPATH} python compare_stages.py eval "$RUN_DIR" \
+    PYTHONPATH=.${PYTHONPATH:+:$PYTHONPATH} python scripts/compare_stages.py eval "$RUN_DIR" \
       "${MODEL_ARGS[@]}" "${TASK_ARGS[@]}" \
       --cache_dir "$CACHE_DIR" --no_cache --no_wandb --verbose 2>&1 | tee "$RUN_DIR/eval.log"
   done
 done
 
-python compare_stages.py summary "$OUT_DIR"
+python scripts/compare_stages.py summary "$OUT_DIR"
 cat "$OUT_DIR/summary.md"

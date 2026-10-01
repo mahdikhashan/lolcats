@@ -70,7 +70,7 @@ tail -f distill-fd32.log
 
    ```bash
    CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 MODEL_CONFIG=distill_llama3_2_1b_lizard_w128_fd32_m4 \
-     MODELS=stage1 TASKS="mmlu_subset piqa" ./compare_stages.sh
+     MODELS=stage1 TASKS="mmlu_subset piqa" scripts/compare_stages.sh
    ```
 
    `compare_stages.sh` builds the checkpoint names from `MODEL_CONFIG`. It downloads the stage 2 checkpoint only when `MODELS` contains `stage2`, so it works without a stage 2 checkpoint. If a checkpoint is already on the machine (option B), it uses that file and does not download it.

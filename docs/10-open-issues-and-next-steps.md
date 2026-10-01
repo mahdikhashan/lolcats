@@ -14,7 +14,7 @@
 ## Missing measurements
 
 1. **The teacher on PIQA and ARC-Easy in the same harness.** This gives the exact gap, because the paper used a newer harness. Use the teacher command in [document 6](06-evaluation-setup.md) with `--task piqa` or `--task arc_easy`, with `--num_shots 0`, and without `--limit`.
-2. **The teacher on all MMLU questions**, and `letters.py` on its log. The teacher should show no strong correlation with one letter. This would be different from the constant answer of the Lizard model.
+2. **The teacher on all MMLU questions**, and `scripts/letters.py` on its log. The teacher should show no strong correlation with one letter. This would be different from the constant answer of the Lizard model.
 3. **Gate statistics** with `gates.py` ([document 6](06-evaluation-setup.md)). They show how much information the gated branch keeps from tokens beyond the window.
 4. **The stage 2 validation loss of Run 2**, from its results CSV on the Hub.
 5. Optional: the remaining tasks of the paper. These are ARC-Challenge (normalized accuracy), HellaSwag (normalized accuracy) and WinoGrande (accuracy).
@@ -73,5 +73,5 @@
    - `./eval.sh` (MMLU),
    - `TASK=piqa NUM_SHOTS=0 ./eval.sh`,
    - `TASK=arc_easy NUM_SHOTS=0 ./eval.sh`,
-   - `letters.py` and `ablate.py` as in [document 6](06-evaluation-setup.md).
+   - `scripts/letters.py` and `scripts/ablate.py` as in [document 6](06-evaluation-setup.md).
 4. Training from the start: `make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=<repo> HF_FLAVOR=h200 HF_TIMEOUT=6h`. Use a Docker image built from `main` ([document 3](03-infrastructure.md)).

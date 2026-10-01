@@ -360,7 +360,7 @@ The table shows how to read the outcome. The values are examples of MMLU-subset 
 
 The review gives this experiment a higher priority than almost all other steps.
 
-The tool is `compare_stages.sh`. The runs and their results are in [experiments/stage-difference.md](experiments/stage-difference.md).
+The tool is `scripts/compare_stages.sh`. The runs and their results are in [experiments/stage-difference.md](experiments/stage-difference.md).
 
 ## The strongest hypothesis
 
@@ -454,7 +454,7 @@ make hf-job HF_FLAVOR=h200 HF_TIMEOUT=6h ARGS="--distill_config <new_distill> --
 ### Phase 3: evaluate the finished model
 
 - **Scores:** First PIQA and ARC-Easy (minutes). Then MMLU with `--limit 20` (1,140 questions, ±1.3, the same questions for every model). Then all MMLU questions.
-- **Letter check:** Run `letters.py` on the log of the full MMLU evaluation. The correlation with one letter should disappear.
+- **Letter check:** Run `scripts/letters.py` on the log of the full MMLU evaluation. The correlation with one letter should disappear.
 - **Checkpoint path:** In `eval.sh`, set `FT_CKPT` to the name of the full run (`...-bs=1-gas=8-nte=2-ms=-1-se=0-re=0_ft.pt`). The default of `FT_CKPT` is the name for a run of stage 2 only.
 - **Decision point 2, success:** These three conditions are true:
   - PIQA and ARC-Easy are within approximately 1–2 points of the teacher *in this harness*.

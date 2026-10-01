@@ -14,12 +14,14 @@ The experiment evaluates three models with the same harness and the same questio
 
 The tasks are the MMLU subset (5-shot, 285 questions), PIQA (0-shot) and ARC-Easy (0-shot).
 
-The tool is `compare_stages.sh` (PR #11, commit `ce6685a`). It runs on a GPU machine with the `lolcats-env` conda environment:
+The tool is `scripts/compare_stages.sh` (PR #11, commit `ce6685a`). It runs on a GPU machine with the `lolcats-env` conda environment:
 
 ```bash
-MODELS=stage1 TASKS=piqa ./compare_stages.sh   # quick check: model B on PIQA
-./compare_stages.sh                            # full run: models A, B and C on the three tasks
+MODELS=stage1 TASKS=piqa scripts/compare_stages.sh   # quick check: model B on PIQA
+scripts/compare_stages.sh                            # full run: models A, B and C on the three tasks
 ```
+
+The runs below occurred before the script moved to `scripts/`. Thus their commands show `./compare_stages.sh` in the repository root.
 
 Each run writes `results/stages/<time>/` with `summary.md`, `summary.json`, `env.txt`, the training results CSVs from the Hub, and the raw logs of each model and task.
 
@@ -198,7 +200,7 @@ Appendix B has the full gate table of model C. These are the differences from mo
 
 ## Open items
 
-1. **Full run with the teacher:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 ./compare_stages.sh`. It adds the teacher on the three tasks and models B and C on ARC-Easy, and it gives paired statistics for each step.
+1. **Full run with the teacher:** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 scripts/compare_stages.sh`. It adds the teacher on the three tasks and models B and C on ARC-Easy, and it gives paired statistics for each step.
 2. **Paired stage 1 → stage 2 difference:** `compare_stages.py` prints paired differences only when all three models are in the run. Thus quick check 2 has no paired difference.
 3. **Next steps of the gap analysis:** Measure the error of stage 1 for each layer (debugging step 4, PR C of section 11). Then run stage 1 with the recipe of the paper and float32 trainable weights (debugging step 5, section 12).
 4. **Other documents:** Document 4 and document 10 can now record the final stage 2 validation loss of Run 2 (2.252 at step 1,100).
