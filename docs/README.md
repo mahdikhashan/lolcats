@@ -21,6 +21,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | 11 | [Gap analysis](11-gap-analysis.md) | Root cause analysis of the gap to the paper. Ranked causes, a hole in the check of checkpoint loading, and a debugging sequence. A plan to close the gap, the effect of each hyperparameter, and a ranking of the causes of the "A" collapse with a debugging plan |
 | – | [Hyperparameters](hyperparameters.md) | Hyperparameters of the Lizard model with their sources, starting with the feature dimension of the feature maps |
 | – | [Math formulas](math-formula.md) | The equations of the paper, each with its source and its code. They include the gated branch, the window branch, the stage 1 loss and the hardware-aware algorithm. |
+| – | [Math against code](math-code-discrepancy.md) | Each formula of the paper next to the code, with a list of 17 differences, their types and their possible effects |
 | – | [References](references.md) | External sources, each with a link and a short description: the MMLU evaluation details of Meta for Llama 3.2, and an MMLU replication notebook |
 
 ## Experiments
