@@ -27,6 +27,7 @@ Each experiment has its own document in `experiments/`, with its method, its run
 | Experiment | Question | Status |
 |---|---|---|
 | [Stage difference](experiments/stage-difference.md) | Does the gap start in stage 1 or in stage 2? Section 10 of the gap analysis. | Two quick checks done: stage 1 on PIQA, and stages 1 and 2 on the MMLU subset. Both point to stage 1. The full run with the teacher is not done yet. |
+| [XAI for the distillation](experiments/xai.md) | Which interpretability methods can show if the distillation works, if the new parameters learn, and if the layers match the teacher? | Ideas only. Nothing has run yet. |
 
 ## Glossary
 
