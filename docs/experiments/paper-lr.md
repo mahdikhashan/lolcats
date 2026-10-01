@@ -1,6 +1,6 @@
 # Experiment: learning rate and schedule of the paper in stage 1, with feature dimension 32
 
-**Status:** Stage 1 trained on HF Jobs. The MMLU subset evaluation ran on 2026-10-01. PIQA is not evaluated yet.
+**Status:** Stage 1 trained on HF Jobs. The evaluations on the MMLU subset, PIQA and ARC-Easy ran on 2026-10-01.
 
 ## Question
 
@@ -49,7 +49,7 @@ Factor 0 of section 12 found that bf16 rounding discards small updates. At a lea
 
 Thus this run can show a worse result than the recipe of the paper would give with float32 weights. The paper trained with FSDP-2, which normally keeps float32 master weights. The paper does not say so.
 
-**Side measurement:** If α is exactly 1.000 in all 16 layers after this run, the result confirms the prediction of factor 0.
+**Side measurement:** If α is exactly 1.000 in all 16 layers after this run, the result agrees with the prediction of factor 0.
 
 ## How to run
 
@@ -96,7 +96,7 @@ MODELS=stage1 TASKS=mmlu_subset \
 scripts/compare_stages.sh 2>&1 | tee mmlu-paper-lr.log
 ```
 
-`scripts/compare_stages.sh` builds the checkpoint name from `DISTILL_CONFIG` and `MODEL_CONFIG`. It downloads the checkpoint from the Hub if the file is not on the machine. Add `piqa` to `TASKS` for PIQA.
+`scripts/compare_stages.sh` builds the checkpoint name from `DISTILL_CONFIG` and `MODEL_CONFIG`. It downloads the checkpoint from the Hub if the file is not on the machine. Use `TASKS="piqa arc_easy"` for PIQA and ARC-Easy.
 
 ## How to compare
 
@@ -111,7 +111,8 @@ The validation losses are directly comparable, because all three runs use the sa
 | Layers 1–15 with γ above 0.999 for 100.0% of the tokens | 15 of 15 | 14 of 15 (layer 15: 99.9%) | **0 of 15** |
 | Layer 0: weight kept after 512 tokens | 0.0059 | 0.25 | 9.3e-25 |
 | α | 0.042–0.648 | 0.063–0.656 | **1.000 in all 16 layers** |
-| PIQA accuracy | 57.6 ± 1.2 | Not measured yet | Not measured yet |
+| PIQA accuracy | 57.6 ± 1.2 | Not measured yet | 55.8 ± 1.2 |
+| ARC-Easy accuracy | Not measured yet | Not measured yet | 34.1 ± 1.0 |
 
 How to read the outcome:
 
@@ -201,7 +202,7 @@ The summary prints the sink logits as 0.25 and 0.12. In bf16, 0.12 is 0.125. The
 
 **Finding 1: the recipe of the paper stops the saturation of the gate**. No layer of 1–15 has γ above 0.999 for all tokens. In 9 of 16 layers, γ is above 0.999 for at most 1.3% of the tokens. The highest share is 68.5% in layer 11. The weight kept after 512 tokens is between 9.3e-25 (layer 0) and 0.36 (layer 15). Thus the gate decays in every layer. With the LoLCATs recipe, it saturated in 14 or 15 of the layers 1–15. This agrees with the prediction of factor 1 of section 12: the high learning rate causes the saturation.
 
-**Finding 2: α stays at exactly 1.000 in all 16 layers**. This confirms the prediction of factor 0 of section 12 and of the risk section above. bf16 rounding discards every update of α at this learning rate. In the runs with the LoLCATs recipe, α moved to 0.04–0.66. Thus in this run, the window branch keeps its full start weight in every layer.
+**Finding 2: α stays at exactly 1.000 in all 16 layers**. This agrees with the prediction of factor 0 of section 12 and of the risk section above. bf16 rounding discards every update of α at this learning rate. In the runs with the LoLCATs recipe, α moved to 0.04–0.66. Thus in this run, the window branch keeps its full start weight in every layer.
 
 **Finding 3: the stage 1 validation loss is much higher**. It is 8.1641, against 3.4219 for fd32 with the LoLCATs recipe (2.4×) and 3.2549 for fd128 (2.5×). All three runs use the same loss and the same validation data. Thus the attention approximation of this run is much worse.
 
@@ -211,6 +212,30 @@ The summary prints the sink logits as 0.25 and 0.12. In bf16, 0.12 is 0.125. The
 
 **Finding 6: the sink logits again stop at powers of two**. All 16 values are exactly 0.25 or 0.125. They are smaller than with the LoLCATs recipe (0.5–2), because the learning rate is lower.
 
+### Run 2: PIQA and ARC-Easy (2026-10-01)
+
+- Evaluation command: the command in "Evaluation on the A10" above, with `TASKS="piqa arc_easy"`
+- Run directory: `results/stages/20261001-220202`, on `student06`, GPU 0 (A10)
+- Code, software and checkpoint: the same as in run 1. The checkpoint has the same SHA-256 (`189cf945…`). All 80 Lizard parameters loaded in both evaluations. The gate table is identical to run 1.
+
+| Task (0-shot) | Accuracy | Normalized accuracy | n |
+|---|---|---|---|
+| PIQA | **55.8 ± 1.2** | 55.1 ± 1.2 | 1,838 |
+| ARC-Easy | **34.1 ± 1.0** | 34.0 ± 1.0 | 2,376 |
+
+Reference values:
+
+| Model | PIQA | ARC-Easy | Source |
+|---|---|---|---|
+| fd128, LoLCATs recipe, after stage 1 | 57.6 ± 1.2 | Not measured | [Stage difference](stage-difference.md), quick check 1 |
+| fd128, after stage 2 (the Lizard model) | 67.95 ± 1.09 | 54.8 | [Document 7](../07-results.md) |
+| Teacher, in the paper | 74.1 | 65.4 | Table 9 of the paper, newer harness |
+| Chance | 50.0 | Approximately 25 | 2 choices on PIQA. Mostly 4 choices on ARC-Easy. |
+
+**Finding 7: PIQA does not improve**. This run gets 55.8, against 57.6 for fd128 with the LoLCATs recipe after stage 1. The difference is −1.8 points (approximately 33 questions). The unpaired SE of the difference is approximately 1.6, so z ≈ −1.1. Thus the two values are not clearly different. Both are only a little above chance (50.0) and far below the teacher (74.1 in the paper).
+
+**Finding 8: ARC-Easy is above chance, but far below the stage 2 model and the teacher**. This run gets 34.1, against approximately 25 for chance, 54.8 for the stage 2 model and 65.4 for the teacher in the paper. No earlier stage 1 model has an ARC-Easy result. Thus this value has no stage 1 reference yet.
+
 ### Interpretation
 
 - **The outcome is the third row of the outcome table**: the validation loss is higher, and α is exactly 1.000 in all layers. Thus bf16 rounding limits this run (factor 0). The next step is to keep the trainable weights in float32, then run this experiment again.
@@ -218,10 +243,11 @@ The summary prints the sink logits as 0.25 and 0.12. In bf16, 0.12 is 0.125. The
 - **A decaying gate alone does not give a good approximation**. The validation loss is 2.4× higher. Two effects of bf16 can explain this. α cannot leave 1.0 (finding 2), and the feature-map weights probably stop learning after step 700 (finding 4). This run cannot separate these effects from the effect of the decaying gate itself.
 - **Relation to section 13.2 of the gap analysis**. The runs with a saturated gate have a lower validation loss than this run with a decaying gate. This agrees with the hypothesis that a normalized gated branch reaches a lower loss when it can reach the BOS tokens. But the frozen α and the bf16 rounding also affect this run. Thus this result does not test the hypothesis.
 - **MMLU stays at the level of chance in all three runs**. The letter pattern changes with the recipe ("A" → "C" and "D"), but the accuracy does not. Thus the "A" preference is not the only problem of the stage 1 model.
-- This result is preliminary. It uses only the MMLU subset, and the comparison with the earlier runs uses unpaired SEs.
+- **PIQA and ARC-Easy agree with the MMLU subset**. With the decaying gate, PIQA does not improve (finding 7), and ARC-Easy stays far below the stage 2 model (finding 8). Thus the stage 1 model of this run is not better than the stage 1 model of Run 1 on any of the three tasks. This agrees with its higher validation loss.
+- This result is preliminary. The comparison with the earlier runs uses unpaired SEs.
 
 ### Open items
 
 1. **float32 storage of the trainable weights** (factor 0 of section 12). Then repeat this experiment. Expected: α moves away from 1.0, and the validation loss improves after step 700.
-2. **PIQA:** add `piqa` to `TASKS` in the evaluation command. Compare with 57.6 ± 1.2 for fd128 with the LoLCATs recipe.
+2. **Stage 1 references for ARC-Easy and PIQA:** evaluate the fd32 checkpoint with the LoLCATs recipe with `TASKS="piqa arc_easy"` (the default `DISTILL_CONFIG`). Then only the learning rate and the schedule differ between the two stage 1 models.
 3. **Validation curve:** the trainer writes a results CSV next to the checkpoint. The Hub has none for this run under the expected name. A curve would show the loss after step 700 directly.
