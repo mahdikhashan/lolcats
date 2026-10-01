@@ -8,6 +8,7 @@
 # -> make docker-build docker-push IMAGE=<dockerhub-user>/lolcats
 # -> make hf-job IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo> [TARGET=lizard] [HF_FLAVOR=h200]
 # -> make hf-job-finetune IMAGE=<dockerhub-user>/lolcats HF_REPO=<hf-user>/<repo>  # Lizard finetune only, from the distill checkpoint in HF_REPO (H200)
+# -> make hf-job IMAGE=... HF_REPO=... HF_FLAVOR=h200 ARGS="--model_config <model_config> --no_finetune"  # distill only, with another model config
 
 PYTHON ?= python
 

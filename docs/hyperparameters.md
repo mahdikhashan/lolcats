@@ -20,6 +20,7 @@ This document lists hyperparameters of the Lizard model in this project and comp
 | LoLCATs config for Llama-3-8B | 64 | 0.5 (head dimension 128) | 128 | `configs/model/distill_llama3_8b_lk_smd_wtk64_fd64_w01.yaml` |
 | Lizard paper | 128 | 1 for its 8B models (head dimension 128) | 256 | Table 13 of the paper |
 | **This project** | **128** | **2** | **256** | `feature_dim: 128` in `configs/model/distill_llama3_2_1b_lizard_w128_fd128_m4.yaml` |
+| Feature dimension experiment | 32 | 0.5 | 64 | `configs/model/distill_llama3_2_1b_lizard_w128_fd32_m4.yaml`, [experiment](experiments/feature-dimension.md) |
 | jku-thesis | 128 | 2 | 256 | `LIZARD = {..., "feature_dim": 128}` in `config.py` |
 
 **The feature dimension of this project is 128.** It is 4× the value of the LoLCATs rule for Llama-3.2-1B (32), and 2× the head dimension.

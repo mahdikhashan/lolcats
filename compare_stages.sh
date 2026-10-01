@@ -60,8 +60,11 @@ fi
 cp lm_eval_harness/models_huggingface.py "$LM_EVAL_DIR/lm_eval/models/huggingface.py"
 python -m pip install -q -e "$LM_EVAL_DIR"
 
+# The stage 2 checkpoint only when stage2 runs: a stage-1-only training has none
+CKPTS=("$DISTILL_CKPT")
+if [[ " $MODELS " == *" stage2 "* ]]; then CKPTS+=("$FT_CKPT"); fi
 echo "-> Downloading checkpoints from $HF_REPO"
-python - "$HF_REPO" "$DISTILL_CKPT" "$FT_CKPT" <<'EOF'
+python - "$HF_REPO" "${CKPTS[@]}" <<'EOF'
 import sys
 from huggingface_hub import hf_hub_download
 repo_id, *filenames = sys.argv[1:]
