@@ -11,6 +11,8 @@ def get_optimizer(optim: str, model: nn.Module, **kwargs: any) -> Optimizer:
     """
     Return training optimizer
     """
+    if 'betas' in kwargs:  # A list in the YAML config; torch expects a tuple
+        kwargs['betas'] = tuple(kwargs['betas'])
     if optim == 'sgd':
         return torch.optim.SGD(model.parameters(), **kwargs)
     elif optim == 'adam':
@@ -39,6 +41,10 @@ def get_scheduler(lr_scheduler_type: str, optimizer: Optimizer,
     elif lr_scheduler_type == 'cosine_warmup':
         from transformers import get_cosine_schedule_with_warmup
         return get_cosine_schedule_with_warmup(optimizer=optimizer, **kwargs)
+
+    elif lr_scheduler_type == 'cosine_warmup_min_lr':  # Cosine decay to min_lr_rate x the peak, not to 0
+        from transformers.optimization import get_cosine_with_min_lr_schedule_with_warmup
+        return get_cosine_with_min_lr_schedule_with_warmup(optimizer=optimizer, **kwargs)
     
     elif lr_scheduler_type in ['linear_warmup', 'linear']:
         from transformers import get_linear_schedule_with_warmup
