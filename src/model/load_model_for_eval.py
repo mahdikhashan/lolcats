@@ -249,7 +249,8 @@ def load_model_from_checkpoint(attn_mlp_checkpoint_path: str = None,
     if finetune_checkpoint_path is not None:
         # Update architecture with LoRAs
         if finetune_config.finetune.method == 'lora':
-            model, _ = create_peft_config(model, finetune_config.finetune)
+            model, _ = create_peft_config(model, finetune_config.finetune,  # keep the model dtype (not bf16)
+                                          target_dtype=model_config['model']['torch_dtype'])
         else:
             for p in model.parameters():
                 p.requires_grad = True
