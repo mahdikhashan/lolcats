@@ -113,8 +113,8 @@ The 2-point limits are a rule of thumb. The SE of one PIQA accuracy is approxima
 
 ## Checks
 
-- **The job command.** `make -n hf-job-finetune` with the arguments above prints the expected job: the download of the config 1 checkpoint, then `make lizard` with `--load_distill_checkpoint default` and the float32 model config.
-- **The checkpoint path.** The real argument parsing of `distill_llama.py` ran with the arguments of the inner `make lizard`. The model config is the float32 config, and the `default` path is the same file as `DISTILL_CKPT`.
+- **The job command**. `make -n hf-job-finetune` with the arguments above prints the expected job. The job downloads the config 1 checkpoint, then runs `make lizard` with `--load_distill_checkpoint default` and the float32 model config.
+- **The checkpoint path**. The real argument parsing of `distill_llama.py` ran with the arguments of the inner `make lizard`. The model config is the float32 config, and the `default` path is the same file as `DISTILL_CKPT`.
 
 ## Results
 
