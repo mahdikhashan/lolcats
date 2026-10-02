@@ -1,6 +1,6 @@
 # Experiment (XAI): layer-wise MSE
 
-**Status:** The script `scripts/layer_mse.py` and its CPU test are ready. It has not run on the real stage 1 checkpoints yet.
+**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss.
 
 ## Question
 
@@ -123,4 +123,133 @@ These tests ran on CPU, in a copy of the repository with a tiny Llama (3 layers,
 
 ## Results
 
-Not run yet.
+### Run 1: five stage 1 checkpoints (2026-10-02)
+
+- Commands: the commands in "Commands on the A10" above, with the default options (the dtype of each model config). The plot reference is fd32 with the LoLCATs recipe.
+- Machine: `student06`, GPU 0 (A10). Code: lolcats `c0e2fe1`, torch 2.5.1.
+- Data: all 16 validation batches (32,768 tokens).
+- Files in [`xai-layer-wise-mse/`](xai-layer-wise-mse/): the two plots and the JSON file of each checkpoint.
+
+#### Check of the stored loss
+
+| Checkpoint | Dtype | Stored step | Stored loss | Script: 1000 × mean layer MSE | Difference |
+|---|---|---|---|---|---|
+| fd32, LoLCATs recipe | bf16 | 1,100 | 3.4219 | 3.4175 | −0.129% |
+| fd128, LoLCATs recipe | bf16 | 1,100 | 3.2549 | 3.2516 | −0.101% |
+| fd32, recipe of the paper | bf16 | 700 | 8.1641 | 8.1468 | −0.211% |
+| fd32, recipe of the paper | float32 | 1,100 | 4.9478 | 4.9478 | +0.000% |
+| Second round, config 1 | float32 | 1,100 | 3.9764 | 3.9764 | +0.000% |
+
+In all five checkpoints, all 80 Lizard parameters loaded (0 missing, 0 unexpected, 0 not loaded).
+
+#### Plots
+
+![Layer-wise MSE of five stage 1 checkpoints](xai-layer-wise-mse/stage1.png)
+
+![Layer-wise relative MSE of five stage 1 checkpoints](xai-layer-wise-mse/stage1_relative.png)
+
+#### Values
+
+1000 × MSE of each layer (the scale of `distill/eval/loss`):
+
+| Layer | fd32, LoLCATs recipe, bf16 | fd128, LoLCATs recipe, bf16 | fd32, paper recipe, bf16 | fd32, paper recipe, float32 | Second round, config 1 |
+|---|---|---|---|---|---|
+| 0 | 0.194 | 0.1816 | 0.597 | 0.3415 | 0.2662 |
+| 1 | 0.4147 | 0.4046 | 2.053 | 0.9553 | 0.6563 |
+| 2 | 0.4532 | 0.4522 | 4.82 | 1.987 | 1.146 |
+| 3 | 1.431 | 1.47 | 5.501 | 2.897 | 1.966 |
+| 4 | 2.689 | 2.582 | 6.771 | 4.239 | 3.202 |
+| 5 | 3.894 | 3.755 | 6.676 | 4.85 | 4.269 |
+| 6 | 4.017 | 3.687 | 8.072 | 5.313 | 4.469 |
+| 7 | 3.151 | 2.88 | 7.347 | 4.436 | 3.577 |
+| 8 | 4.002 | 3.683 | 6.918 | 4.847 | 4.321 |
+| 9 | 4.006 | 3.917 | 6.748 | 4.891 | 4.339 |
+| 10 | 3.006 | 2.759 | 6.294 | 4.081 | 3.35 |
+| 11 | 2.265 | 2.147 | 6.004 | 3.327 | 2.565 |
+| 12 | 2.339 | 2.212 | 7.093 | 3.736 | 2.735 |
+| 13 | 2.788 | 2.639 | 12.06 | 5.687 | 3.696 |
+| 14 | 3.203 | 3.072 | 12.19 | 5.984 | 4.169 |
+| 15 | 16.83 | 16.19 | 31.2 | 21.59 | 18.9 |
+| Mean (the loss) | 3.4175 | 3.2516 | 8.1468 | 4.9478 | 3.9764 |
+| Stored loss | 3.4219 | 3.2549 | 8.1641 | 4.9478 | 3.9764 |
+
+Relative MSE of each layer (MSE / mean square of the teacher output). An output of 0 gives 1.0:
+
+| Layer | fd32, LoLCATs recipe, bf16 | fd128, LoLCATs recipe, bf16 | fd32, paper recipe, bf16 | fd32, paper recipe, float32 | Second round, config 1 |
+|---|---|---|---|---|---|
+| 0 | 0.4273 | 0.3998 | 1.315 | 0.7518 | 0.586 |
+| 1 | 0.3 | 0.2926 | 1.485 | 0.6914 | 0.475 |
+| 2 | 0.4391 | 0.4381 | 4.67 | 1.923 | 1.109 |
+| 3 | 0.4949 | 0.5085 | 1.903 | 1.002 | 0.6797 |
+| 4 | 0.4279 | 0.4107 | 1.077 | 0.6747 | 0.5097 |
+| 5 | 0.3987 | 0.3845 | 0.6836 | 0.496 | 0.4366 |
+| 6 | 0.3612 | 0.3315 | 0.7258 | 0.477 | 0.4012 |
+| 7 | 0.2575 | 0.2354 | 0.6005 | 0.3622 | 0.292 |
+| 8 | 0.2755 | 0.2536 | 0.4764 | 0.3334 | 0.2972 |
+| 9 | 0.3526 | 0.3447 | 0.5939 | 0.4293 | 0.3809 |
+| 10 | 0.2938 | 0.2696 | 0.6151 | 0.3975 | 0.3263 |
+| 11 | 0.4034 | 0.3824 | 1.069 | 0.5919 | 0.4563 |
+| 12 | 0.4155 | 0.3929 | 1.26 | 0.6601 | 0.4832 |
+| 13 | 0.3464 | 0.3279 | 1.499 | 0.706 | 0.4588 |
+| 14 | 0.3091 | 0.2964 | 1.176 | 0.5755 | 0.401 |
+| 15 | 0.5584 | 0.5371 | 1.036 | 0.712 | 0.6231 |
+
+#### Findings
+
+**Finding 1: the check passes**. The two float32 checkpoints reproduce their stored loss exactly. The three bf16 checkpoints differ by −0.10% to −0.21%. The trainer adds the 16 layer values and multiplies by 1000 in bf16, which has approximately 3 significant digits. The script adds them in float64. Thus the difference has the expected size of bf16 rounding.
+
+**Finding 2: the shape agrees with Figure 14 of LoLCATs**. The MSE is small in the first layers and increases with depth. Layer 15 jumps to 16–31, against 3–12 in layer 14. Layer 15 alone gives 24–31% of the stage 1 loss, and layers 13–15 give 42–43% in every checkpoint.
+
+**Finding 3: the relative MSE changes the picture**. The teacher output becomes larger with depth. Its mean square is 0.0005 in layer 0, 0.010 in layer 14 and 0.030 in layer 15. Thus a large part of the jump in layer 15 comes from the scale of its output. In relative terms, layer 15 is not special:
+
+- With the LoLCATs recipe, the relative MSE is 0.24–0.56 in all layers.
+- With the recipes of the paper, the relative MSE is largest in layer 2: 4.67 (bf16), 1.92 (float32) and 1.11 (config 1).
+
+**Finding 4: even the best recipe misses a large part of the teacher output**. With the LoLCATs recipe, the error has 24–56% of the power of the teacher output in each layer. With the recipes of the paper, some layers have a relative MSE above 1.0. These are 10 layers for bf16, layers 2 and 3 for float32, and layer 2 for config 1. In these layers, the Lizard output is farther from the teacher output than an output of 0.
+
+**Finding 5: two heads of layer 15 give approximately 20% of the stage 1 loss**. Layer 15 has 32 heads. In every checkpoint, heads 14 and 23 have the largest MSE:
+
+| Checkpoint | Head 14 | Head 23 | Both, share of layer 15 | Both, share of the stage 1 loss |
+|---|---|---|---|---|
+| fd32, LoLCATs recipe | 42.7% | 25.9% | 68.6% | 21.1% |
+| fd128, LoLCATs recipe | 40.8% | 27.8% | 68.6% | 21.3% |
+| fd32, recipe of the paper, bf16 | 22.0% | 14.4% | 36.5% | 8.7% |
+| fd32, recipe of the paper, float32 | 31.7% | 21.0% | 52.8% | 14.4% |
+| Second round, config 1 | 38.7% | 24.2% | 62.9% | 18.7% |
+
+Thus 2 of the 512 heads of the model give up to 21% of the loss. In layers 1–14, the 4 heads with the largest MSE give 20–44% of the MSE of their layer. With equal heads, 4 heads would give 12.5%.
+
+**Finding 6: the recipes have the same order in every layer**. In all 16 layers, the MSE decreases in this order: recipe of the paper in bf16, in float32, config 1, the LoLCATs recipe. fd128 has a lower MSE than fd32 in 15 of the 16 layers. Its MSE is 0.91–1.03 × the MSE of fd32.
+
+**Finding 7: the difference between the recipes is largest in the first and the last layers**:
+
+- **Relative to the LoLCATs recipe (fd32):** the MSE of config 1 is 2.53 × in layer 2 and 1.58 × in layer 1. It is 1.37 × in layers 0 and 3, and 1.30–1.33 × in layers 13 and 14. In layers 5–11, it is only 1.08–1.14 ×.
+- **In absolute values:** layers 13–15 give 43–44% of the difference in the loss for each recipe of the paper. Layer 15 alone gives 19–23%.
+- **The second round:** against the float32 run, config 1 lowers the MSE in every layer, to 0.58–0.89 ×. The largest decreases are in layers 2 (0.58 ×), 13 (0.65 ×), 3 (0.68 ×), 1 (0.69 ×) and 14 (0.70 ×). These are the same layers as the largest difference to the LoLCATs recipe.
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. The script reproduces the stored loss | Exactly for float32. −0.10% to −0.21% for bf16 (finding 1). | Yes |
+| 2. The last layers have the largest MSE | Layer 15 has the largest MSE in every checkpoint (finding 2) | Yes |
+| 3. The relative MSE gives a different order of the layers | Layer 15 is not special in relative terms. Layer 2 has the largest relative MSE for the recipes of the paper (finding 3). | Yes |
+| 4. The recipes differ most where their gates differ most | The gate decays fastest in layers 1–2 for config 1 and in layers 0–2 for the float32 run. These layers have a large relative difference to the LoLCATs recipe, and layer 2 has the largest. But layers 3, 13 and 14 also have large differences, and there the gate of config 1 keeps 0.66–0.88 after 512 tokens. | Partly |
+
+The gate values come from one MMLU prompt ([second round](second-round.md), [float32 experiment](float32.md)). The MSE comes from the Alpaca validation data. Thus the comparison in prediction 4 is only approximate.
+
+### Interpretation
+
+- **The stage 1 loss mainly measures the last layers**. The loss uses the absolute MSE. Thus each layer counts with the scale of its output, and layers 13–15 give 42–43% of the loss. Each layer has its own Lizard parameters and gets the teacher input. With Adam, the scale of one layer therefore has almost no effect on the training of that layer. But it decides which layers dominate the reported loss.
+- **Two heads of layer 15 are the largest single source of error**. The same two heads lead in every checkpoint, also with fd128. Thus the cause is probably a property of these teacher heads, not of the recipe. One possible property is attention to tokens far outside the window of 128 tokens, which the gated branch cannot reproduce. This is a hypothesis. The attention maps of the teacher can test it (section 9 of [XAI for the distillation](xai.md)).
+- **The recipes of the paper fail most in the first layers, in relative terms**. In layer 2, all three runs with the recipe of the paper have a relative MSE above 1. In these runs, the gate of the first layers decays fast. This agrees in part with the gate-state hypothesis of section 13.2 of the [gap analysis](../11-gap-analysis.md).
+- **The second-round settings fix the error mainly where the gap is** (finding 7). Thus β2 and the minimum learning rate help most in the layers where the recipe of the paper is weakest.
+- **The MSE alone does not show the effect on the model output**. An error in layer 15 reaches the logits directly. An error in layer 2 passes through 13 more layers. This run does not measure which error is more harmful for MMLU, PIQA or ARC-Easy.
+
+### Open items
+
+1. **Attention maps of layer 15, heads 14 and 23**, in the teacher: how much attention falls outside the window of 128 tokens.
+2. **Softmax attention in layer 15, as an ablation**: a model config with `softmax_attentions: [15]` keeps the teacher attention in that layer. In stage 1, each layer got the teacher input during training. Thus the stage 1 weights of layers 0–14 can probably stay unchanged. This needs a check of the loader, which then finds unexpected keys for layer 15.
+3. **Config 2 (gradient clipping)**: add its checkpoint to the plot after its training.
+4. **Stage 2**: extend the script to stage 2 checkpoints (LoRA weights), for the second part of Figure 14.
+5. **One precision**: run the three bf16 checkpoints again with `--torch_dtype float32`, to compare all checkpoints at the same precision.
