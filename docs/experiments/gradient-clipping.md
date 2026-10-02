@@ -1,6 +1,6 @@
 # Experiment: gradient clipping in stage 1
 
-**Status:** The code, the config and the CPU tests are ready. No stage 1 training with this config has run yet.
+**Status:** Stage 1 training with config 2 is running (2026-10-02). In epoch 0, the logged gradient norm is approximately 3.6, so clipping acts on these steps. The run has no validation loss yet.
 
 ## Question
 
@@ -146,4 +146,36 @@ These tests ran on CPU with a tiny Llama.
 
 ## Results
 
-Not run yet.
+### Run 1, in progress: the training log of epoch 0 (2026-10-02)
+
+This section uses nine progress lines from the job log of epoch 0, at gradient steps 181 and 182 (micro-batches 1,453–1,459 of 4,714). The lines show six different micro-batches.
+
+#### How to read the progress line
+
+| Field | Meaning (from `src/trainer/default_lm.py` and `distill_attention_xent_mse.py`) | Values in the log |
+|---|---|---|
+| `loss` | The mean over the epoch so far of the micro-batch loss **divided by 8** (`gradient_accumulation_steps`). It is not on the scale of the validation loss. | 4.324 → 4.312. × 8 = 34.6 → 34.5. |
+| `loss_mse` | 1000 × the mean MSE over the 16 layers, for the current micro-batch only. It is on the same scale as `distill/eval/loss`. | 6.777–7.628 (mean 7.24) |
+| `lr` | The learning rate after the last optimizer step | 0.00099. The cosine schedule gives 9.92e-4 at step 181. |
+| `gradient step` | The number of optimizer steps. One optimizer step uses 8 micro-batches. Thus one epoch has 589 optimizer steps. | 181, 182 |
+| `grad norm` | The global gradient norm **before** clipping, at the last optimizer step. All lines between two optimizer steps show the same value. | 3.578 (step 181), 3.574 (step 182) |
+
+The `loss` field changes slowly, because it is a mean over all micro-batches of the epoch. Its mean of 34.6 is much higher than the current `loss_mse` of approximately 7. Thus the first micro-batches of the epoch had a much higher loss. The progress line does not show these values.
+
+#### Findings so far
+
+**Finding 1: clipping acts on these steps**. The gradient norm is 3.578 and 3.574, above the threshold 1.0. Clipping multiplies the gradient by 1 / 3.58 ≈ 0.28 before the optimizer step. This agrees with prediction 1, but only for 2 of the 1,178 optimizer steps.
+
+**Finding 2: the norm is small, compared to the earlier estimates**. The CPU test with a tiny random model gave 3,856. The real model gives approximately 3.6. Thus the CPU value does not predict the real norm, as the section on the loss scale says. The norm is only approximately 3.6 × the threshold. If the norm decreases later in the run, it can go below 1.0. Then clipping stops on those steps.
+
+**Finding 3: clipping by an almost constant factor has almost no effect on Adam**. From step 181 to step 182, the norm changes by 0.1%. Adam divides each gradient by the root of its second-moment estimate. Thus the same factor on all steps cancels. The per-weight gradients after clipping are much larger than eps: with a global norm of 1.0 and 98,384 weights, their RMS is approximately 0.003. Clipping can change the steps of Adam only when the norm changes much from step to step, or when it goes below 1.0. This agrees with prediction 2 (a small effect), but the validation loss must show it.
+
+**Finding 4: one micro-batch does not show the difference between config 1 and config 2**. The six values of `loss_mse` vary from 6.78 to 7.63 (±6%). The outcome table uses limits of 5%. Thus only the validation loss can separate the two configs. The log has no value of `distill/eval/loss` yet.
+
+**Finding 5: the duration**. The progress bar shows 23:08 for 1,453 micro-batches, which is 1.05 micro-batches for each second. At this rate, one epoch needs approximately 75 minutes, and two epochs need approximately 2.5 hours. The command of option A has `HF_TIMEOUT=3h`. If the job runs with that command, the margin for the start, the last evaluation and the upload is approximately 30 minutes.
+
+#### What to record next
+
+- The gradient norm in epoch 1 and at the end of the run (near step 1,178). A norm below 1.0 means that clipping stopped acting.
+- The values of `distill/eval/loss` at each evaluation (every 100 optimizer steps), and the stored best step and loss.
+- If W&B is on: `train/grad_norm` gives the norm at almost every optimizer step. The logging condition in `train_step` skips only the multiples of `logging_steps` (100).
