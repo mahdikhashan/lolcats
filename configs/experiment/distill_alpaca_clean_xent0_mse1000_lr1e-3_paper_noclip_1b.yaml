@@ -1,6 +1,6 @@
-# Stage 1 with the full optimizer recipe of the Lizard paper, Table 13 (docs/experiments/second-round.md):
-# distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b.yaml plus AdamW betas (0.9, 0.99), a minimum learning rate
-# of 0.1x the peak, and gradient clipping at 1.0. Everything else is the same.
+# Stage 1 with the optimizer recipe of the Lizard paper, Table 13, without gradient clipping
+# (docs/experiments/second-round.md): distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b.yaml plus AdamW
+# betas (0.9, 0.99) and a minimum learning rate of 0.1x the peak. Everything else is the same.
 dataset:
   name: alpaca_clean
   dataset_config:
@@ -37,7 +37,6 @@ trainer:  # HuggingFace Trainer-like arguments
   reverse_kl: false
   mse_factor: 1000
   xent_factor: 0
-  max_grad_norm: 1.0  # Lizard paper, Table 13: clip the global gradient norm of the trainable weights at 1.0
   
   bf16: true
   train_split: train

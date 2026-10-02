@@ -51,15 +51,12 @@ class OurTrainer():
                  print_samples: bool = False,
                  initial_eval: bool = True,
                  num_save_ckpt_steps: int = 1000,
-                 max_grad_norm: float = None,  # Clip the global gradient norm to this value; None: no clipping
                  **kwargs: any):
         super().__init__()
         self.model = model
         self.step = 0  # Total steps taken
         self.grad_step = 0  # Total gradient updates
         self.compute_loss_backprop = False  # Whether we backprop in self.compute_loss
-        self.max_grad_norm = max_grad_norm
-        self.grad_norm = None  # Global gradient norm before clipping, at the last optimizer step
 
         if optimizer_and_scheduler is None:
             assert optimizer_args is not None and lr_scheduler_args is not None
@@ -175,9 +172,6 @@ class OurTrainer():
                 except Exception as e:
                     breakpoint()
             if (self.step + 1) % accum_iter == 0:  # and self.step != 0:
-                if self.max_grad_norm is not None:  # After all accumulated gradients, before the step
-                    self.grad_norm = torch.nn.utils.clip_grad_norm_(
-                        model.parameters(), self.max_grad_norm).item()
                 self.optimizer.step()
                 if not self.scheduler_step_after_epoch and self.scheduler is not None:
                     self.scheduler.step()
@@ -193,8 +187,6 @@ class OurTrainer():
                 total_loss += loss
             desc = f"Training epoch {epoch} | loss: {total_loss / (ix + 1):.3f} | lr: {self.optimizer.param_groups[0]['lr']:.5f}"
             desc += f' | gradient step: {self.grad_step}'
-            if self.grad_norm is not None:
-                desc += f' | grad norm: {self.grad_norm:.3f}'
             for k, v in train_metrics.items():
                 desc += f' | {k}: {v:.3f}'
             pbar.set_description(desc)
@@ -205,8 +197,6 @@ class OurTrainer():
                 self.train_metrics['train/epoch'] = epoch
                 self.train_metrics['train/step'] = self.grad_step
                 self.train_metrics['train/lr'] = self.optimizer.param_groups[0]['lr']
-                if self.grad_norm is not None:
-                    self.train_metrics['train/grad_norm'] = self.grad_norm
                 for k, v in train_metrics.items():
                     self.train_metrics[f'train/{k}'] = v
                 
