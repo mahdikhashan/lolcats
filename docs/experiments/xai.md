@@ -167,7 +167,7 @@ Collect these statistics for each layer and each branch: mean, standard deviatio
 
 Compare the attention maps of the teacher, of the gated branch and of the window branch with a similarity measure. Do not overinterpret attention weights as explanations. Attention maps help with diagnosis, but they are not sufficient evidence that a mechanism contains the knowledge. For this architecture, the review prefers causal interventions (section 10).
 
-**Repository check:** The implementation is dense and calculates the full L × L weight matrix of both branches ([document 2](../02-compute-and-cost.md)). Thus the attention maps of both branches are available directly. The teacher attention uses RoPE, and the Lizard branches do not.
+**Repository check:** The implementation is dense and calculates the full L × L weight matrix of both branches ([document 2](../02-compute-and-cost.md)). Thus the attention maps of both branches are available directly. The teacher attention uses RoPE, and the Lizard branches do not. `attention_weights.py` plots the weights of the teacher and of Lizard and measures their distance ([XAI: sample attention weights](xai-sample-attention-weight.md)).
 
 ## 10. Activation patching
 
