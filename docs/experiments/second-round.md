@@ -1,6 +1,6 @@
 # Experiment: second round, with β2 and the minimum learning rate of the paper
 
-**Status:** Config 1 (`..._paper_noclip_1b`, without clipping) finished stage 1 training and evaluation on 2026-10-02 (MMLU subset, PIQA and ARC-Easy). The validation loss is 3.9764, between the float32 run (4.9478) and the LoLCATs recipe (3.4219). The run with gradient clipping is in a separate change and has not run yet.
+**Status:** Config 1 (`..._paper_noclip_1b`, without clipping) finished stage 1 training and evaluation on 2026-10-02 (MMLU subset, PIQA and ARC-Easy). The validation loss is 3.9764, between the float32 run (4.9478) and the LoLCATs recipe (3.4219). The run with gradient clipping is the [gradient clipping experiment](gradient-clipping.md).
 
 ## Question
 
@@ -14,7 +14,7 @@ The [float32 experiment](float32.md) gave a stage 1 validation loss of 4.9478. W
 
 This experiment changes β2 and the minimum learning rate to the values of the paper. Does stage 1 then become better?
 
-**Gradient clipping** is in a separate change. That change adds the clipping to the trainer, and a second config with all three settings. Thus the comparison of the two configs shows the effect of clipping alone.
+**Gradient clipping** is a separate experiment, the [gradient clipping experiment](gradient-clipping.md). It adds the clipping to the trainer, and a second config with all three settings. Thus the comparison of the two configs shows the effect of clipping alone.
 
 ## What changes, and what stays the same
 
@@ -33,7 +33,7 @@ This experiment changes β2 and the minimum learning rate to the values of the p
 
 After this change, the stage 1 recipe agrees with Table 13 of the paper, except for three settings:
 
-- **No gradient clipping**, not 1.0. The separate change adds it.
+- **No gradient clipping**, not 1.0. The [gradient clipping experiment](gradient-clipping.md) adds it.
 - **Feature dimension 32**, not 128. The [feature dimension experiment](feature-dimension.md) found a small effect: +5% validation loss with 32 under the LoLCATs recipe.
 - **The scale of the loss**, which the paper does not give clearly ([math against code](../math-code-discrepancy.md), D11). For Adam, a constant factor on the loss has no effect, except through eps (factor 8 of section 12 of the [gap analysis](../11-gap-analysis.md)).
 
@@ -125,7 +125,7 @@ These tests ran on CPU with a tiny Llama.
 
 ## Results
 
-In this section, config 1 is `distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b`, the config of this document. Config 2 is the config with gradient clipping from the separate change.
+In this section, config 1 is `distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b`, the config of this document. Config 2 is the config with gradient clipping of the [gradient clipping experiment](gradient-clipping.md).
 
 ### Run 1: config 1, without clipping (2026-10-02)
 
@@ -244,7 +244,7 @@ This agrees with larger effective steps (prediction 2) or with more learning in 
 - **The outcome is the second row of the outcome table**. The validation loss is between 3.4219 and 4.9478. Thus β2 and the minimum learning rate of the paper help, but do not close the difference to the LoLCATs recipe.
 - **The stage 1 recipe progression with fd32** is now: 8.1641 (recipe of the paper, bf16), 4.9478 (float32), 3.9764 (float32, β2 0.99, minimum learning rate). The LoLCATs recipe gives 3.4219 with fd32 and 3.2549 with fd128.
 - **The remaining difference has three possible explanations**. This run cannot separate them:
-  - **Gradient clipping** is the last optimizer setting of Table 13 that is still different. The run with clipping (config 2) is in a separate change.
+  - **Gradient clipping** is the last optimizer setting of Table 13 that is still different. The run with clipping (config 2) is the [gradient clipping experiment](gradient-clipping.md).
   - **The gate state**. The runs with the lowest loss (LoLCATs recipe) have a saturated gate. In this run, the gate keeps more history than in the float32 run, and the loss is lower. This agrees with the hypothesis of section 13.2 of the [gap analysis](../11-gap-analysis.md). In that hypothesis, a normalized gated branch reaches a lower loss when it can reach the BOS tokens. The agreement does not prove the hypothesis.
   - **Less training**. The loss still decreased at the last evaluation (finding 2), and the feature-map weights are still smaller than with the LoLCATs recipe (finding 3).
 - **The validation loss does not predict the accuracy after stage 1**. The fd32 stage 1 models have validation losses from 3.42 to 8.16. Their accuracies stay in small ranges: 23.2–26.7 on the MMLU subset, 55.8–57.7 on PIQA and 34.1–36.5 on ARC-Easy. With unpaired SEs, none of the differences is clear.
@@ -252,7 +252,7 @@ This agrees with larger effective steps (prediction 2) or with more learning in 
 
 ### Open items
 
-1. **Config 2 (gradient clipping)**: merge the change with the clipping, build a new Docker image, and train config 2. Record the logged gradient norm. It shows how often a limit of 1.0 clips with `mse_factor` 1000.
+1. **Config 2 (gradient clipping)**: the [gradient clipping experiment](gradient-clipping.md) describes the run. Record the logged gradient norm. It shows how often a limit of 1.0 clips with `mse_factor` 1000.
 2. **Separate the effects of β2 and the minimum learning rate**, if the difference is necessary for the thesis. Each needs one more run with only one of the two settings.
 3. **The gate state and the normalization of the gated branch** (D1 in [math against code](../math-code-discrepancy.md)). Test them with the single-layer bench of section 13.5 of the gap analysis (step 5).
 4. **More sensitive measures for stage 1**: the error of each layer against the teacher, and the KL divergence of the logits. Steps 1 and 3 of section 13.5 of the gap analysis describe them. Paired comparisons on the same questions would also help.
