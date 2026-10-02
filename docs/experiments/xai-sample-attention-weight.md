@@ -1,6 +1,6 @@
 # Experiment (XAI): sample attention weights
 
-**Status:** The script `scripts/attention_weights.py` and its CPU test are ready. It has not run on the real checkpoints yet.
+**Status:** Run 1 finished on 2026-10-02: four checkpoints, heads 0–3. Trained Lizard reproduces long-range heads well and local heads badly. Layer 15, head 14 is a local head in the teacher.
 
 ## Question
 
@@ -154,4 +154,131 @@ These tests ran on CPU, in a copy of the repository with a tiny Llama (3 layers,
 
 ## Results
 
-Not run yet.
+### Run 1: four checkpoints, heads 0–3 (2026-10-02)
+
+- **Checkpoints:**
+  - second round, config 1 (stage 1, float32),
+  - fd32 with the LoLCATs recipe (stage 1, bf16),
+  - fd128 with the LoLCATs recipe after stage 2 (bf16),
+  - the initial Lizard weights (float32).
+- **Commands:** the commands in "How to run" above, with the default options. These are `--inputs teacher`, 1 sample of 1,024 tokens, and crops of layers 0, 4, 8, 12 and 15 and heads 0–3.
+- **Machine:** `student06`, GPU 0 (A10). Code: lolcats `092771a`, torch 2.5.1.
+- **Files** in [`xai-sample-attention-weight/`](xai-sample-attention-weight/):
+  - the four JSON files, saved without indentation. The content is the same as on the A10.
+  - `heads0-3_head<h>.png`, with the initial weights.
+  - `trained_heads0-3_head<h>.png`, without the initial weights. Their strong diagonal sets the color scale of each column, so the trained rows are clearer without them.
+  - `heads0-3_metrics.png` and `heads0-3_metrics.md`.
+- The PNGs come from the JSON files with the `plot` command of this commit. This commit moves the tick labels of the last keys, so that they do not touch the labels of the first keys. The metrics table is the same as the table of the A10.
+
+#### Checks
+
+| Checkpoint | Dtype | Checkpoint check | Largest error: teacher | Largest error: Lizard |
+|---|---|---|---|---|
+| Second round, config 1 | float32 | 80 keys, 0 missing, 0 unexpected, 0 not loaded | 0.0 | 5.7e-7 |
+| fd32, LoLCATs recipe | bf16 | The same | 2.8e-3 | 1.7e-3 |
+| fd128, LoLCATs recipe, stage 2 | bf16 | The same, and 128 LoRA keys of stage 2 | 2.8e-3 | 1.7e-3 |
+| Initial weights | float32 | – | 0.0 | 9.0e-8 |
+
+For the bf16 models, the teacher check compares the weights with the output of FlashAttention-2 in bf16. Thus all errors have the size of float32 or bf16 rounding.
+
+#### Plots
+
+![Teacher mass outside the window and TV distance of each checkpoint, for all layers and heads](xai-sample-attention-weight/heads0-3_metrics.png)
+
+![Attention weights of head 2 for the teacher and the trained checkpoints](xai-sample-attention-weight/trained_heads0-3_head2.png)
+
+![Attention weights of head 0 for the teacher, the trained checkpoints and the initial weights](xai-sample-attention-weight/heads0-3_head0.png)
+
+The other heads: [head 0](xai-sample-attention-weight/trained_heads0-3_head0.png), [head 1](xai-sample-attention-weight/trained_heads0-3_head1.png) and [head 3](xai-sample-attention-weight/trained_heads0-3_head3.png) without the initial weights. [Head 1](xai-sample-attention-weight/heads0-3_head1.png), [head 2](xai-sample-attention-weight/heads0-3_head2.png) and [head 3](xai-sample-attention-weight/heads0-3_head3.png) with the initial weights.
+
+#### Values
+
+Means over the 32 heads of each layer, over the queries at or after the window. "Normalized" divides the Lizard mass outside the window by the Lizard row sum (ratio of the two means, thus approximate):
+
+| Layer | Teacher: first key | Teacher: outside the window | Lizard, config 1: outside the window (normalized) | Lizard, fd32 LoLCATs: outside the window (normalized) | TV: config 1 | TV: fd32 LoLCATs | TV: fd128 stage 2 | TV: init. | α: config 1 | α: fd32 LoLCATs |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.151 | 0.511 | 0.445 | 0.357 | 0.493 | 0.557 | 0.595 | 0.689 | 0.472 | 0.063 |
+| 1 | 0.372 | 0.720 | 0.603 | 0.735 | 0.287 | 0.204 | 0.239 | 0.798 | 0.505 | 0.194 |
+| 2 | 0.291 | 0.727 | 0.531 | 0.680 | 0.290 | 0.208 | 0.205 | 0.813 | 0.504 | 0.158 |
+| 3 | 0.253 | 0.639 | 0.536 | 0.623 | 0.301 | 0.265 | 0.288 | 0.774 | 0.530 | 0.283 |
+| 4 | 0.222 | 0.571 | 0.531 | 0.591 | 0.333 | 0.316 | 0.331 | 0.721 | 0.577 | 0.385 |
+| 5 | 0.210 | 0.510 | 0.523 | 0.539 | 0.371 | 0.363 | 0.368 | 0.701 | 0.624 | 0.582 |
+| 6 | 0.181 | 0.464 | 0.518 | 0.537 | 0.384 | 0.379 | 0.415 | 0.647 | 0.589 | 0.535 |
+| 7 | 0.156 | 0.472 | 0.510 | 0.532 | 0.369 | 0.359 | 0.371 | 0.646 | 0.603 | 0.570 |
+| 8 | 0.172 | 0.455 | 0.509 | 0.515 | 0.373 | 0.370 | 0.368 | 0.627 | 0.644 | 0.645 |
+| 9 | 0.174 | 0.460 | 0.508 | 0.525 | 0.404 | 0.397 | 0.413 | 0.647 | 0.629 | 0.656 |
+| 10 | 0.237 | 0.579 | 0.549 | 0.567 | 0.310 | 0.296 | 0.305 | 0.693 | 0.615 | 0.602 |
+| 11 | 0.262 | 0.619 | 0.560 | 0.599 | 0.282 | 0.273 | 0.288 | 0.715 | 0.558 | 0.461 |
+| 12 | 0.271 | 0.657 | 0.573 | 0.620 | 0.274 | 0.257 | 0.264 | 0.746 | 0.560 | 0.406 |
+| 13 | 0.283 | 0.675 | 0.571 | 0.625 | 0.264 | 0.238 | 0.237 | 0.747 | 0.543 | 0.410 |
+| 14 | 0.245 | 0.643 | 0.568 | 0.618 | 0.273 | 0.250 | 0.265 | 0.718 | 0.545 | 0.426 |
+| 15 | 0.244 | 0.620 | 0.572 | 0.625 | 0.294 | 0.293 | 0.299 | 0.731 | 0.576 | 0.594 |
+| All | 0.233 | 0.582 | – | – | 0.331 | 0.314 | 0.328 | 0.713 | – | – |
+
+#### Findings
+
+**Finding 1: the checks pass**. In every layer, the weights times v reproduce the output of the layer. The errors are at most 5.7e-7 for float32 and 2.8e-3 for bf16.
+
+**Finding 2: the initial weights do not reproduce the teacher**. The TV distance is 0.63–0.81 in each layer (mean 0.713). The initial weights put no weight outside the window and no weight on the first key. Instead, they show a strong diagonal: with γ = 0.5, the gated branch halves the weight for each token back. This agrees with prediction 1 and with the init. rows of LoLCATs.
+
+**Finding 3: the trained checkpoints reproduce a large part of the teacher weights**. Their mean TV distance is 0.31–0.33, against 0.71 for the initial weights. The plots show three patterns:
+
+- Lizard reproduces stripes that depend on the content, for example in layer 8, head 2.
+- Lizard reproduces the first-key column of layers 4–15.
+- For each layer, the normalized mass outside the window of Lizard (0.45–0.74) is near the mass of the teacher (0.46–0.73).
+
+**Finding 4: the more local a teacher head is, the worse Lizard matches it**. The table groups the 512 heads by the teacher mass outside the window:
+
+| Teacher mass outside the window | Heads | TV: config 1 | TV: fd32 LoLCATs | TV: fd128 stage 2 | TV: init. |
+|---|---|---|---|---|---|
+| Below 0.3 (local heads) | 22 | 0.563 | 0.559 | 0.560 | 0.578 |
+| 0.3–0.5 | 145 | 0.413 | 0.413 | 0.428 | 0.627 |
+| 0.5–0.7 | 197 | 0.309 | 0.297 | 0.317 | 0.720 |
+| Above 0.7 (long-range heads) | 148 | 0.247 | 0.205 | 0.212 | 0.809 |
+
+Over the 512 heads, the correlation between the teacher mass outside the window and the TV distance is −0.75 to −0.78 for the trained checkpoints. It is +0.85 for the initial weights. In 8–14 of the 512 heads, the trained checkpoint is farther from the teacher than the initial weights. These are mostly local heads: their mean teacher mass outside the window is 0.33, against 0.58 for all heads. Examples are layer 0, head 2 (TV 0.88–0.90, initial 0.68) and layer 15, head 14 (TV 0.89, initial 0.73).
+
+**Finding 5: Lizard gives all heads of a layer almost the same long-range share**. Inside one layer, the teacher mass outside the window varies much between the heads (standard deviation 0.126, mean over the layers). The normalized Lizard mass varies much less (0.034–0.048). In layer 15, the teacher has 0.087–0.816, and config 1 has 0.53–0.67. In this code, the 32 heads of a layer share all Lizard parameters of the layer:
+
+- `phi_q` and `phi_k` map each head with the same weight (64 → feature dimension).
+- `W_gamma` gives one gate value for each token, for all heads.
+- `alpha_blend` is one number, and `meta_tokens` are 4 numbers.
+
+Only q, k and v differ between the heads, and stage 1 does not train them. The gated branch always has a row sum of 1, and α sets the window part for all heads together. Thus a local head probably cannot switch off its weight outside the window. This is a probable explanation of finding 4. No intervention tested it yet.
+
+**Finding 6: layer 15, head 14 is a local head in the teacher (prediction 4 does not hold)**. The teacher puts only 8.7% of its weight outside the window and 3.4% on the first key. Lizard puts 50–53% of its normalized weight outside the window and 14–23% on the first key. The TV distance is 0.89, rank 1 or 2 of the 512 heads in every checkpoint. The [layer-wise MSE](xai-layer-wise-mse.md) found a large MSE for this head (finding 5 there). Thus this MSE comes from too much weight far away in Lizard, not from far attention in the teacher. Head 23 is less extreme: TV 0.55 (rank 20–40), with 39% of the teacher weight outside the window.
+
+**Finding 7: layer 0 is the worst layer of all trained checkpoints**. Its TV distance is 0.49–0.60. The teacher has local heads there: for example, head 2 is a sharp diagonal (one token back) in the plots. All trained rows are almost empty for this head. With the LoLCATs recipe, α of layer 0 is only 0.04–0.06, so the window branch is almost off. Config 1 has α = 0.47 and a lower TV distance in layer 0 (0.49 against 0.56–0.60). The output of layer 0 is small. Thus the layer-wise MSE and the stage 1 loss hardly show this error.
+
+**Finding 8: the LoLCATs recipe is a little closer to the teacher in layers 1–15**. Its TV distance is lower than that of config 1 in all 15 layers. The difference is largest in layers 1–3 (0.04–0.08). In layer 0, config 1 is closer (finding 7). This agrees with the lower validation loss of the LoLCATs recipe and with the layers of the gap in the layer-wise MSE.
+
+**Finding 9: the first key (prediction 2 does not hold in general)**. In layers 1–15, the normalized Lizard weight on the first key follows the teacher within approximately 0.1 for both recipes. For example, layer 1 has 0.31–0.38 against 0.37. Only layer 0 misses it (0.03–0.06 against 0.15). The LoLCATs recipe puts a little more weight on the first key in layers 1, 2 and 15 only.
+
+**Finding 10: stage 2 does not bring the weights closer to the teacher in this comparison**. fd128 after stage 2 has a mean TV distance of 0.328, and fd32 after stage 1 has 0.314. The two checkpoints differ in the feature dimension and in the stage. Thus this run cannot show the effect of stage 2 alone.
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. The initial weights do not reproduce the teacher | TV 0.63–0.81, no weight outside the window or on the first key (finding 2) | Yes |
+| 2. The LoLCATs recipe puts more weight on the first key | Only in layers 1, 2 and 15. Both recipes follow the teacher in layers 1–15 and miss the first key in layer 0 (finding 9). | Mostly no |
+| 3. Position patterns inside the window are harder without RoPE | The sharp diagonals of layer 0 (heads 0 and 2) are missing, and the diagonal of layer 15, head 2 is weaker. The content stripes stay (findings 3 and 7). | Yes, qualitatively |
+| 4. Layer 15, heads 14 and 23 have much teacher weight outside the window | Head 14 has only 8.7%, head 23 has 39%. The error of head 14 comes from the far weight of Lizard (finding 6). | No |
+
+### Interpretation
+
+- **Lizard reproduces long-range heads well and local heads badly**. This is the opposite of the expectation for a model with an exact softmax window. Two properties of this code probably cause it. First, the heads of a layer share all its Lizard parameters (finding 5). Second, the gated branch always gives each row a weight of 1. Lizard also has no RoPE, so the window branch cannot reproduce sharp position patterns (prediction 3).
+- **The gate design of the paper**. The paper uses the same scalar gate for all heads. Table 4 of the paper ([math formulas](../math-formula.md), section 8) found this gate best on MMLU for Llama-3-8B. It gave 61.2, against 53.5 for a GLA gate with one value for each dimension. Thus a gate for each head is not an obvious fix. One α for each head is a smaller change that the paper does not test.
+- **The largest single error of stage 1 (layer 15, head 14) is a local head**. With a separate α for this head, Lizard could probably give it a larger window part. The single-layer bench of section 13.5 of the [gap analysis](../11-gap-analysis.md) can test this.
+- **The loss and the attention weights measure different things**. The layer-wise MSE weights each layer with its output scale, so layer 0 counts little. The TV distance shows that layer 0 has the largest difference in the attention weights. Both measures agree on layer 15, head 14.
+- Attention weights help with the diagnosis. They do not prove which mechanism carries the knowledge ([XAI for the distillation](xai.md), section 9).
+- This result comes from one sample of 1,024 tokens. The metrics average over 896 queries for each head, but more samples would make them more stable.
+
+### Open items
+
+1. **Crops of layers 13–15, heads 14 and 23**: run `compute` again with `--layers 13 14 15 --heads 14 23`, to see the weights of these heads.
+2. **fd128 after stage 1**: compute it, to separate the effect of stage 2 from the effect of the feature dimension (finding 10).
+3. **More samples**: `--samples 4` for more stable metrics.
+4. **Normalized metrics in the script**: the mass outside the window and on the first key, divided by the row sum for each query. This run uses a ratio of means.
+5. **One α for each head**, as an ablation with the single-layer bench. Does it lower the TV distance of the local heads and the MSE of layer 15?
+6. **`--inputs own` for stage 2**: the weights of the stage 2 model on its own hidden states.
