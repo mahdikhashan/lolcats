@@ -38,6 +38,7 @@ Each experiment has its own document in `experiments/`, with its method, its run
 | [float32 in stage 1](experiments/float32.md) | Does float32 (all weights, the AdamW states and the stage 1 target) fix the frozen α and the high validation loss of the paper-LR run? | Stage 1 trained. α moves (0.60–0.79) and the validation loss drops from 8.16 (bf16) to 4.95, but stays above 3.42 (LoLCATs recipe). MMLU subset 24.6, PIQA 57.7, ARC-Easy 35.7: not clearly better than the other stage 1 models. |
 | [Second round: β2 and minimum learning rate](experiments/second-round.md) | Does stage 1 become better when β2 and the minimum learning rate also follow the paper? Gradient clipping is a separate experiment. | Config 1 trained and evaluated on 2026-10-02. Validation loss 3.9764 (float32 run: 4.9478, LoLCATs recipe: 3.4219). MMLU subset 26.7, PIQA 57.3, ARC-Easy 36.5. |
 | [Gradient clipping in stage 1](experiments/gradient-clipping.md) | Does gradient clipping at 1.0 (Table 13 of the paper) change stage 1, on top of the second round (config 1)? The trainer logs the gradient norm. | Code, config and CPU tests ready. Stage 1 not trained yet. |
+| [XAI: layer-wise MSE](experiments/xai-layer-wise-mse.md) | In which layers does the stage 1 Lizard attention differ most from the teacher attention? A plot like Figure 14 of the LoLCATs paper, from saved checkpoints without retraining. | Script and CPU test ready. Not run on the real checkpoints yet. |
 
 ## Glossary
 

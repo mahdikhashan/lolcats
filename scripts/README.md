@@ -9,6 +9,7 @@ These scripts evaluate the Lizard model and help to find the cause of the gap to
 | `temperature.sh` | Evaluates the stage 1 and stage 2 models on the MMLU subset with the logits divided by each temperature. | [Temperature](../docs/experiments/temperature.md) |
 | `letters.py` | Compares the MMLU accuracy of each subject with the frequency of each answer letter, from the log of an MMLU evaluation. | [Document 6](../docs/06-evaluation-setup.md), [document 7, section 3](../docs/07-results.md) |
 | `ablate.py` | Evaluates the Lizard model with the gated branch or the window branch disabled during inference. | [Document 6](../docs/06-evaluation-setup.md), [document 7, section 5](../docs/07-results.md), [XAI ideas, section 5](../docs/experiments/xai.md) |
+| `layer_mse.py` | Calculates the MSE between the teacher attention and the Lizard attention for each layer, from a stage 1 checkpoint. Plots the layers of several checkpoints, as Figure 14 of the LoLCATs paper. | [XAI: layer-wise MSE](../docs/experiments/xai-layer-wise-mse.md) |
 
 ## How to run
 
@@ -21,6 +22,8 @@ scripts/temperature.sh                                      # temperatures 0.1, 
 python scripts/compare_stages.py summary results/stages/<time>
 python scripts/letters.py results/lm_eval/hendrycksTest-5shot-<time>.log
 ABLATE=no_gla PYTHONPATH=. python scripts/ablate.py <arguments of lm_eval_harness/eval_lm_harness.py>
+python scripts/layer_mse.py compute results/layer_mse/<name>.json --model_config <model config> --distill_config <distill config>
+python scripts/layer_mse.py plot results/layer_mse/<plot name> results/layer_mse/<name>.json ...
 ```
 
-The comments at the top of each script give all options. The shell scripts and `ablate.py` need the `lolcats-env` conda environment and a GPU. `compare_stages.sh` explains the setup.
+The comments at the top of each script give all options. The shell scripts, `ablate.py` and `layer_mse.py compute` need the `lolcats-env` conda environment and a GPU. `compare_stages.sh` explains the setup.

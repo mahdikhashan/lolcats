@@ -226,7 +226,7 @@ Its summary has these parts:
 
 The review gave example values for this summary. They are illustrations, not measurements.
 
-**Repository check:** `compare_stages.py` already logs part of this: the gate statistics, the Lizard parameter values and the checkpoint check. Branch ablations are in `ablate.py`. A new script can use the same loading path (`load_model_from_checkpoint`).
+**Repository check:** `compare_stages.py` already logs part of this: the gate statistics, the Lizard parameter values and the checkpoint check. Branch ablations are in `ablate.py`. A new script can use the same loading path (`load_model_from_checkpoint`). The MSE of each layer against the teacher attention is in `layer_mse.py` ([XAI: layer-wise MSE](xai-layer-wise-mse.md)).
 
 ## Check the MMLU evaluation first
 
