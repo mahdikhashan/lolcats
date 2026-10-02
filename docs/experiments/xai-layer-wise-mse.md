@@ -66,7 +66,7 @@ All values are means over the validation batches. The file also has 1000 × the 
 | fd32, recipe of the paper, bf16 | `distill_llama3_2_1b_lizard_w128_fd32_m4` | `distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b` | 8.1641 |
 | fd32, recipe of the paper, float32 | `distill_llama3_2_1b_lizard_w128_fd32_m4_fp32` | `distill_alpaca_clean_xent0_mse1000_lr1e-3_cosine_1b` | 4.9478 |
 | Second round, config 1 | `distill_llama3_2_1b_lizard_w128_fd32_m4_fp32` | `distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b` | 3.9764 |
-| Gradient clipping, config 2 | `distill_llama3_2_1b_lizard_w128_fd32_m4_fp32` | `distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_1b` | After its training |
+| Gradient clipping, config 2 | `distill_llama3_2_1b_lizard_w128_fd32_m4_fp32` | `distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_1b` | 3.5092 |
 
 ### Commands on the A10
 
@@ -250,6 +250,6 @@ The gate values come from one MMLU prompt ([second round](second-round.md), [flo
 
 1. **Attention maps of layer 15, heads 14 and 23**, in the teacher: how much attention falls outside the window of 128 tokens.
 2. **Softmax attention in layer 15, as an ablation**: a model config with `softmax_attentions: [15]` keeps the teacher attention in that layer. In stage 1, each layer got the teacher input during training. Thus the stage 1 weights of layers 0–14 can probably stay unchanged. This needs a check of the loader, which then finds unexpected keys for layer 15.
-3. **Config 2 (gradient clipping)**: add its checkpoint to the plot after its training.
+3. **Config 2 (gradient clipping)**: trained, with a stored loss of 3.5092. Add its checkpoint to the plot.
 4. **Stage 2**: extend the script to stage 2 checkpoints (LoRA weights), for the second part of Figure 14.
 5. **One precision**: run the three bf16 checkpoints again with `--torch_dtype float32`, to compare all checkpoints at the same precision.
