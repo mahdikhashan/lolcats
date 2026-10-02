@@ -10,7 +10,7 @@ This document analyzes the gap to the paper again, with the results that came af
 
 It also uses the results of the stage 1 recipe experiments ([paper LR](experiments/paper-lr.md), [float32](experiments/float32.md), [second round](experiments/second-round.md), [feature dimension](experiments/feature-dimension.md)) and of the [stage difference](experiments/stage-difference.md) experiment.
 
-**Basis**. The ranking and the mechanism in section 3 come from measurements on saved checkpoints. No intervention tested the mechanism yet. Section 5 proposes the experiments that can test it. The gradient clipping run ([config 2](experiments/gradient-clipping.md)) has no result yet.
+**Basis**. The ranking and the mechanism in section 3 come from measurements on saved checkpoints. No intervention tested the mechanism yet. Section 5 proposes the experiments that can test it. The gradient clipping run ([config 2](experiments/gradient-clipping.md)) finished after this analysis, with a validation loss of 3.5092 (sections 1 and 2).
 
 ## The gap
 
@@ -30,6 +30,7 @@ The table is the same as in document 11. All stage 1 models so far get 22.5–26
 | Checkpoint checks (`compare_stages.py`, `attention_weights.py`) | Every evaluation with these scripts loaded all 80 Lizard parameters. The stage 2 checkpoint loaded all 128 LoRA weights. | Cause 3 of document 11 (missing keys) does not occur. |
 | [Paper LR](experiments/paper-lr.md), [float32](experiments/float32.md) | With the learning rate of the paper, bf16 storage froze α at 1.000 (validation loss 8.1641). float32 fixed it (4.9478). | Factor 0 of document 11 (precision) holds for stage 1. |
 | [Second round](experiments/second-round.md) | β2 = 0.99 and a minimum learning rate lowered the validation loss to 3.9764. The LoLCATs recipe gives 3.4219 (fd32) and 3.2549 (fd128). | The recipe of the paper, in float32, does not beat the LoLCATs recipe. |
+| [Gradient clipping](experiments/gradient-clipping.md) | Clipping at 1.0 lowered the validation loss from 3.9764 to 3.5092. α is lower, and the gate saturates more. The accuracies did not change clearly. | With all optimizer settings of Table 13, the recipe of the paper comes near the LoLCATs recipe, but does not pass it. |
 | All stage 1 recipes | The accuracies after stage 1 stay in small ranges, also with validation losses from 3.25 to 8.16. | The stage 1 recipe does not explain the stage 1 drop on the tasks. |
 | [Layer-wise MSE](experiments/xai-layer-wise-mse.md) | Layer 15 gives 24–31% of the loss. Its heads 14 and 23 alone give up to 21%. With the LoLCATs recipe, the error has 24–56% of the power of the teacher output in each layer. | Even the best recipe approximates each layer only roughly. |
 | [Sample attention weights](experiments/xai-sample-attention-weight.md) | Mean TV distance to the teacher: 0.31–0.33 (initial weights 0.71). The more local a teacher head is, the worse Lizard matches it (correlation −0.75 to −0.78). | The error has a structure: it depends on the head, not mainly on the recipe. |
@@ -50,6 +51,7 @@ Document 11 stated this hypothesis: the code is right, but the LoLCATs recipe gi
 | fd32, recipe of the paper, bf16 | 8.1641 | 25.3 | 55.8 | 34.1 |
 | fd32, recipe of the paper, float32 | 4.9478 | 24.6 | 57.7 | 35.7 |
 | fd32, second round, config 1, float32 | 3.9764 | 26.7 | 57.3 | 36.5 |
+| fd32, gradient clipping, config 2, float32 | 3.5092 | 23.2 | 57.5 | 35.6 |
 
 - **The recipe of the paper approaches the LoLCATs recipe, but does not pass it**. Each change to the recipe of the paper lowered the loss. But the lowest loss is still the loss of the LoLCATs recipe.
 - **The tasks do not follow the loss**. With unpaired SEs, none of the differences in the accuracies is clear.
@@ -126,7 +128,7 @@ The gate is different. The paper chose the shared scalar gate on purpose. Table 
 |---|---|---|---|---|
 | 1 | **A limit for each head**: shared Lizard parameters (D2, α, gate), a normalized gated branch (D1), no RoPE | Stage 1, and thus everything after it | Heads reach the window-share ceiling. Local heads match worst (correlation −0.75). The largest error is a local head. The relative MSE is 0.24–0.56 also with the best recipe. | Measured pattern. The mechanism is a hypothesis. |
 | 2 | **Stage 2 recipe and precision** | Stage 2 | Stage 2 recovers 10.4 PIQA points. It has never run with the recipe of the paper. `create_peft_config` casts the stage 2 model to bf16, also for float32 configs. | Not tested |
-| 3 | **Stage 1 recipe** | Stage 1 | The recipe of the paper in float32 does not beat the LoLCATs recipe. Clipping has no result yet. The LoLCATs recipe in float32 is not measured. | Partly tested. Smaller than expected. |
+| 3 | **Stage 1 recipe** | Stage 1 | The recipe of the paper in float32 does not beat the LoLCATs recipe. Clipping lowered the loss to 3.5092, 2.6% above the LoLCATs recipe, with no clear change in the accuracies. The LoLCATs recipe in float32 is not measured. | Partly tested. Smaller than expected. |
 | 4 | **Stage 1 too short** | Stage 1 | In the float32 runs, the best step is the last evaluation. The loss still decreased. | Probable, not measured |
 | 5 | **The "A" collapse on MMLU** | Downstream | Probably a symptom of rank 1: no copy heads (section 3.4) | Hypothesis |
 | 6 | **Data, packing and harness** | Both | No new evidence. The teacher is not measured on PIQA and ARC-Easy in this harness yet. | Open, inexpensive to check |
@@ -168,7 +170,7 @@ Each change keeps the old behavior as the default, behind a model config option.
 | # | Experiment | Reason | Cost |
 |---|---|---|---|
 | H1 | **The LoLCATs recipe in float32** (learning rate 1e-2, plateau schedule, the float32 model config) | The missing cell of the 2 × 2 grid of document 11 (section 12): {bf16, float32} × {LoLCATs recipe, recipe of the paper} | Approximately 50 minutes |
-| H2 | **Gradient clipping, config 2** | Already trained. Evaluate it with `compare_stages.sh`, `layer_mse.py` and `attention_weights.py`. | Evaluation only |
+| H2 | **Gradient clipping, config 2** | Trained and evaluated: validation loss 3.5092 ([gradient clipping](experiments/gradient-clipping.md)). `layer_mse.py` and `attention_weights.py` have not run on it yet. | XAI only |
 | H3 | **A longer stage 1** (4 epochs instead of 2) with the best recipe | In the float32 runs, the validation loss still decreased at the last evaluation | Approximately 100 minutes |
 | H4 | **Stage 1 learning rate sweep in float32**: 3e-3 and 5e-3, with the cosine schedule and the minimum learning rate | Between the paper (1e-3) and LoLCATs (1e-2). Appendix B of the paper used such a sweep. | Approximately 50 minutes each |
 | H5 | **Stage 2 with the recipe of the paper** on the best stage 1: learning rate 5e-4, cosine, LoRA on q, k, v. First fix the bf16 cast of `create_peft_config`. Variants: Lizard parameters frozen or trainable. | Stage 2 decides the final scores. It has never run with the recipe of the paper. | Approximately 3 hours each |
