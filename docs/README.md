@@ -19,6 +19,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | 9 | [Comparison with the paper](09-paper-comparison.md) | Architecture against the paper, recipe differences, and the 1B results of the paper |
 | 10 | [Open issues and next steps](10-open-issues-and-next-steps.md) | Known code issues, hypotheses, planned experiments and decision rules |
 | 11 | [Gap analysis](11-gap-analysis.md) | Root cause analysis of the gap to the paper. Ranked causes, a hole in the check of checkpoint loading, and a debugging sequence. A plan to close the gap, the effect of each hyperparameter, and a ranking of the causes of the "A" collapse with a debugging plan |
+| 12 | [Gap analysis 2](12-gap-analysis-2.md) | The gap analysis again, with the recipe, layer-wise MSE and attention weight results. A limit for each head as the new main cause, an updated ranking, and new XAI, code and hyperparameter experiments |
 | – | [Hyperparameters](hyperparameters.md) | Hyperparameters of the Lizard model with their sources, starting with the feature dimension of the feature maps |
 | – | [Math formulas](math-formula.md) | The equations of the paper, each with its source and its code. They include the gated branch, the window branch, the stage 1 loss and the hardware-aware algorithm. |
 | – | [Math against code](math-code-discrepancy.md) | Each formula of the paper next to the code, with a list of 17 differences, their types and their possible effects |
