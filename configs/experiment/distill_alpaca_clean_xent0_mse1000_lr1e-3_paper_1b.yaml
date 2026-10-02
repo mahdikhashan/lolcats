@@ -1,0 +1,56 @@
+# Stage 1 with the full optimizer recipe of the Lizard paper, Table 13 (docs/experiments/second-round.md):
+# distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b.yaml plus gradient clipping at 1.0.
+# Everything else is the same.
+dataset:
+  name: alpaca_clean
+  dataset_config:
+    name: default
+    path: yahma/alpaca-cleaned
+    chunk_size: 2048  # sequence length for distilling
+    concat_data: true
+    cache_dir: 'data/alpaca'  # Change this to where you want to save
+  pretrained_model_config:  # will be updated based on model_config
+    pretrained_model_name_or_path: 'meta-llama/Meta-Llama-3-1B'
+    cache_dir: '/workspace/scratch/'
+  preprocess_config: null
+
+dataloader:
+  batch_size: 1
+  num_workers: 2
+  drop_last: false
+  pin_memory: true
+
+optimizer:
+  optim: adamw_torch_fused
+  lr: 0.001          # Lizard paper, Table 13: peak learning rate of stage 1 (the LoLCATs config uses 0.01)
+  weight_decay: 0.0
+  betas: [0.9, 0.99] # Lizard paper, Table 13 (the torch default, used before, is (0.9, 0.999)); eps stays 1e-8
+
+lr_scheduler:        # Lizard paper: cosine schedule with a 10% linear warmup and a minimum ratio of 0.1
+  lr_scheduler_type: cosine_warmup_min_lr  # transformers get_cosine_with_min_lr_schedule_with_warmup, one step per optimizer step
+  num_warmup_steps: 118             # 10% of the 1,178 optimizer steps of stage 1 (2 epochs x 589)
+  num_training_steps: 1178
+  min_lr_rate: 0.1                  # Lizard paper, Table 13: decays to 0.1x the peak (1e-4), not to 0
+
+trainer:  # HuggingFace Trainer-like arguments  
+  name: distill_attention_xent_mse
+  reverse_kl: false
+  mse_factor: 1000
+  xent_factor: 0
+  max_grad_norm: 1.0  # Lizard paper, Table 13: clip the global gradient norm of the trainable weights at 1.0
+  
+  bf16: true
+  train_split: train
+  val_split: validation
+  num_train_epochs: 2
+  gradient_accumulation_steps: 8
+  seed: 42
+  batch_size: 1
+  load_best_model_at_end: true
+  greater_is_better: false
+  metric_for_best_model: distill/eval/loss
+  logging_steps: 100
+  evaluation_strategy: steps
+  max_steps: -1
+  eval_steps: 100
+  max_eval_batches: null
