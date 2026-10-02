@@ -234,11 +234,12 @@ def compute(args):
               else check_checkpoint(model, stage1, 'stage1')}
     if stage2 is not None:
         finetune_config = OmegaConf.load(f'configs/experiment/{args.finetune_config}.yaml')
-        model, _ = create_peft_config(model, finetune_config.finetune)
+        model, _ = create_peft_config(model, finetune_config.finetune,
+                                      target_dtype=str(model_config.model.torch_dtype))  # as in the evaluation
         keys = model.load_state_dict(torch.load(stage2, map_location='cpu')['model_state_dict'], strict=False)
         assert not keys.unexpected_keys, f'Unexpected keys in {stage2}: {keys.unexpected_keys[:5]}'
         checks['stage2'] = check_checkpoint(model, stage2, 'stage2')
-        model = model.merge_and_unload()  # create_peft_config casts the model to bf16, as in the evaluation
+        model = model.merge_and_unload()
     model.eval()
     for stage, c in checks.items():
         if 'expected_keys' in c:

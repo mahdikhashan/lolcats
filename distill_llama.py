@@ -322,7 +322,8 @@ def main():
                                                               checkpoint_path=checkpoint_path,
                                                               print_model=args.verbose,
                                                               merge_loras=False,
-                                                              peft_gradient_checkpointing=not args.no_peft_grad_ckpt)
+                                                              peft_gradient_checkpointing=not args.no_peft_grad_ckpt,
+                                                              target_dtype=model_config['model']['torch_dtype'])  # keep the model dtype (not bf16)
             if args.verbose:
                 print_header(f'*** Trainable finetuning parameters ***')
                 for n, p in model.named_parameters():
@@ -347,7 +348,8 @@ def main():
                                                               args.load_finetune_checkpoint,
                                                               print_model=args.verbose,
                                                               merge_loras=True,
-                                                              peft_gradient_checkpointing=not args.no_peft_grad_ckpt)
+                                                              peft_gradient_checkpointing=not args.no_peft_grad_ckpt,
+                                                              target_dtype=model_config['model']['torch_dtype'])
             print(f'-> Finetuned checkpoint loaded from {args.load_finetune_checkpoint}!')
 
         if ft_peft_config is not None and wandb is not None:

@@ -93,7 +93,7 @@ The script checks both weight matrices in every layer:
 
 Each log ends with the largest relative error of the checks.
 
-**Stage 2 runs in bf16**. `create_peft_config` (`src/model/peft.py`) casts the whole model to bf16 by default (`target_dtype='bfloat16'`). The evaluation (`load_model_for_eval.py`) and the stage 2 training call it in the same way. Thus a stage 2 model is bf16, also with a float32 model config. The script does the same. Then the Lizard check has the size of bf16 rounding (approximately 2e-3).
+**Stage 2 runs in the dtype of the model config**. `create_peft_config` (`src/model/peft.py`) casts the whole model to `target_dtype`, with bf16 as the default. The evaluation (`load_model_for_eval.py`), the stage 2 training and the script give it the dtype of the model config ([stage 2 on config 1](stage2-config1.md)). Thus a stage 2 model with a float32 model config is float32. Before this change, every stage 2 model was bf16, and the Lizard check had the size of bf16 rounding (approximately 2e-3).
 
 ## Predictions
 
@@ -146,7 +146,7 @@ Attention weights help with the diagnosis. But they do not prove which mechanism
 These tests ran on CPU, in a copy of the repository with a tiny Llama (3 layers, 4 heads) and synthetic Alpaca-style data. The chunks had 64 tokens, the crops 8 queries, and the window 16 tokens:
 
 - **Four results**. The stage 1 checkpoint from 25 training steps, and the initial weights. A stage 2 checkpoint (LoRA with random nonzero `lora_B`), with `--inputs teacher` and with `--inputs own`. All four finished with exit 0.
-- **Checks**. Teacher: 0.0 in every layer (float32, eager attention, the same operations). Lizard: at most 1e-7 for stage 1 and the initial weights, and 1.7e-3 for stage 2 (bf16, see "Checks").
+- **Checks**. Teacher: 0.0 in every layer (float32, eager attention, the same operations). Lizard: at most 1e-7 for stage 1 and the initial weights, and 1.7e-3 for stage 2 in bf16. The float32 change of [stage 2 on config 1](stage2-config1.md) came later. After that change, the stage 2 check gave 9.9e-8 (float32).
 - **The checks find errors**. The teacher matrix without RoPE gave a relative error of 0.89.
 - **The metrics respond**. With the initial weights, the row sum was 1.99 and the window share 0.50 (α = 1). With γ forced to approximately 0.97, the Lizard mass outside the window rose from 1.5e-5 to 0.19.
 - **Checkpoint check**. Stage 1: 15 expected keys. Stage 2: 24 LoRA keys. 0 missing, 0 unexpected, 0 not loaded.
