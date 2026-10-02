@@ -330,6 +330,7 @@ def plot(args):
     heads = args.heads or [h for h in first['crop_heads'] if all(h in r['crop_heads'] for r in results)]
     names = ['Softmax (teacher)'] + [r['label'] for r in results]
     ticks = [t for t in range(0, q, 10)]
+    late = [t for t in range(7, q, 10)] or [0]  # offsets of the last keys and queries: no label next to the line
 
     for h in heads:
         rows = [[first['crops'][args.sample][str(l)][str(h)]['teacher'] for l in layers]]
@@ -343,10 +344,10 @@ def plot(args):
                 ax.imshow(rows[r][c], cmap='Blues', vmin=0, vmax=vmax, aspect='auto', interpolation='nearest')
                 ax.axvline(q - 0.5, color=TEXT, linestyle='--', linewidth=1)
                 ax.set_title(f'{names[r]}\nLayer {l} Head {h}', color=TEXT, fontsize=9)
-                ax.set_xticks(ticks + [q + t for t in ticks])
-                ax.set_xticklabels([str(t) for t in ticks] + [str(n - q + t) for t in ticks], fontsize=6)
-                ax.set_yticks(ticks)
-                ax.set_yticklabels([str(n - q + t) for t in ticks], fontsize=6)
+                ax.set_xticks(ticks + [q + t for t in late])
+                ax.set_xticklabels([str(t) for t in ticks] + [str(n - q + t) for t in late], fontsize=6)
+                ax.set_yticks(late)
+                ax.set_yticklabels([str(n - q + t) for t in late], fontsize=6)
                 ax.tick_params(colors=TEXT_2, length=2)
                 ax.set_xlabel('Keys', color=TEXT, fontsize=8)
                 if c == 0:
