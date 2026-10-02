@@ -180,3 +180,45 @@ Source: Section 4 of the paper, which cites Hedgehog (Zhang et al.). The map con
 Each softmax divides the exponentials by their sum for one token. The paper does not write the softmax form as a formula. This document writes it from Table 13 and from the code.
 
 In code: `hedgehog`, with $\mathbf{W}$ in `phi_q` for queries and `phi_k` for keys.
+
+## 8. Gating designs (Table 4 of the paper)
+
+Source: Section 5.4 of the paper, "Gated Structures Design", Table 4. The caption of the table is "Performance comparison of different gating designs and their parameterizations." The paper reports the ablations of Section 5.4 for Llama-3-8B. The value 61.2 is also the MMLU 5-shot result of the full Lizard model of Llama-3-8B in Table 1.
+
+```math
+\begin{array}{llll}
+\textbf{Model} & \textbf{Gating parameterization} & \textbf{Learnable parameters} & \textbf{MMLU 5-shot} \\
+\hline
+\text{Lizard (ours)} & \boldsymbol{\Gamma}_i = \gamma_i \mathbf{1}_d^\top,\ \gamma_i = \sigma(W_\gamma \mathbf{x}_i) & W_\gamma \in \mathbb{R}^{d \times 1} & 61.2 \\
+\text{Mamba-2 (Dao and Gu, 2024)} & \boldsymbol{\Gamma}_i = \gamma_i \mathbf{1}_d^\top,\ \gamma_i = \exp\left( -\mathrm{softplus}(\mathbf{x}_i W_\gamma) \cdot \exp(a) \right) & W_\gamma \in \mathbb{R}^{d \times 1},\ a \in \mathbb{R} & 57.6 \\
+\text{GLA (Yang et al., 2024)} & \boldsymbol{\Gamma}_i = \sigma\left( \mathbf{x}_i W_{\gamma_1} W_{\gamma_2} \right) & W_{\gamma_1} \in \mathbb{R}^{d \times 16},\ W_{\gamma_2} \in \mathbb{R}^{16 \times d} & 53.5 \\
+\text{1D-Pooling} & \boldsymbol{\Gamma}_i = \sigma\left( \mathrm{Pooling}(\mathbf{k}_t) \right) & \text{N/A} & 44.1 \\
+\end{array}
+```
+
+LaTeX source of the same table for the thesis (needs the package `booktabs`):
+
+```latex
+\begin{table}[t]
+  \centering
+  \begin{tabular}{llll}
+    \toprule
+    \textbf{Model} & \textbf{Gating Parameterization} & \textbf{Learnable Parameters} & \textbf{MMLU 5-shot} \\
+    \midrule
+    \textbf{Lizard (Ours)} & $\Gamma_i = \gamma_i \mathbf{1}_d^\top,\ \gamma_i = \sigma(W_\gamma \mathbf{x}_i)$ & $W_\gamma \in \mathbb{R}^{d \times 1}$ & 61.2 \\
+    Mamba-2 (Dao and Gu, 2024) & $\Gamma_i = \gamma_i \mathbf{1}_d^\top,\ \gamma_i = \exp\left(-\mathrm{softplus}(\mathbf{x}_i W_\gamma) \cdot \exp(a)\right)$ & $W_\gamma \in \mathbb{R}^{d \times 1},\ a \in \mathbb{R}$ & 57.6 \\
+    GLA (Yang et al., 2024) & $\Gamma_i = \sigma\left(\mathbf{x}_i W_{\gamma_1} W_{\gamma_2}\right)$ & $W_{\gamma_1} \in \mathbb{R}^{d \times 16},\ W_{\gamma_2} \in \mathbb{R}^{16 \times d}$ & 53.5 \\
+    1D-Pooling & $\Gamma_i = \sigma\left(\mathit{Pooling}(\mathbf{k}_t)\right)$ & N/A & 44.1 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Performance comparison of different gating designs and their parameterizations.}
+  \label{tab:gating-designs}
+\end{table}
+```
+
+**Notes:**
+
+- The paper writes $W_\gamma \mathbf{x}_i$ for Lizard, but $\mathbf{x}_i W_\gamma$ for Mamba-2 and GLA. With $W_\gamma \in \mathbb{R}^{d \times 1}$ and $\mathbf{x}_i$ as a row vector, $\mathbf{x}_i W_\gamma$ is the order that gives a scalar. Both forms mean one scalar for each position.
+- The Lizard row is the default gate of the paper (Section 5). The code uses this gate: `W_gamma = Linear(hidden, 1, bias=False)` and a sigmoid ([math against code](math-code-discrepancy.md), section "Gate").
+- The GLA row gives a gate for each dimension ($W_{\gamma_2}$ maps to $d$ outputs). The Lizard row and the Mamba-2 row give one scalar for each position.
+- In the 1D-Pooling row, the gate has no learnable parameters. It pools over the key vectors $\mathbf{k}_t$.
