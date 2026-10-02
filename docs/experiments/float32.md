@@ -1,6 +1,6 @@
 # Experiment: float32 in stage 1, with the learning rate of the paper and feature dimension 32
 
-**Status:** Stage 1 trained on HF Jobs. The MMLU subset evaluation ran on 2026-10-01. PIQA and ARC-Easy are not evaluated yet.
+**Status:** Stage 1 trained on HF Jobs. The evaluations on the MMLU subset, PIQA and ARC-Easy ran on 2026-10-01.
 
 ## Question
 
@@ -120,8 +120,8 @@ All runs use the same validation data and the same loss (`mse_factor` 1000). Thu
 | MMLU-subset accuracy | 23.2 ± 2.5 | 25.3 ± 2.6 | 24.6 ± 2.5 |
 | Share of "A" answers | 66.0% | 21.8% | 53.0% |
 | Letter mass | 0.024 | 0.009 | 0.018 |
-| PIQA accuracy | Not measured yet | 55.8 ± 1.2 | Not measured yet |
-| ARC-Easy accuracy | Not measured yet | 34.1 ± 1.0 | Not measured yet |
+| PIQA accuracy | Not measured yet | 55.8 ± 1.2 | 57.7 ± 1.2 |
+| ARC-Easy accuracy | Not measured yet | 34.1 ± 1.0 | 35.7 ± 1.0 |
 | Layers 1–15 with γ above 0.999 for 100.0% of the tokens | 14 of 15 | 0 of 15 | 0 of 15 (3 layers at 99.9%) |
 | α | 0.063–0.656 | 1.000 in all 16 layers | **0.602–0.786** |
 | Sink logits exactly at a power of two | 10 of 16 layers | 16 of 16 layers | No pattern (2 of 16 print as 0.25) |
@@ -240,6 +240,41 @@ The feature-map weights have an RMS of 0.086–0.131 and a maximum absolute valu
 
 **Finding 5: MMLU stays at the level of chance**. The accuracy is 24.6, and the letter mass is 0.018. The model selects "A" for 53.0% of the questions and almost never selects "B" (2.1%). In all four stage 1 models so far, the accuracy is between 22.5 and 25.3.
 
+### Run 2: PIQA and ARC-Easy (2026-10-01)
+
+- Evaluation command: the command in "Evaluation on the A10" above, with `TASKS="piqa arc_easy"`
+- Run directory: `results/stages/20261002-014647`, on `student06`, GPU 0 (A10)
+- Code, software and checkpoint: the same as in run 1. The checkpoint has the same SHA-256 (`75e6eddb…`). All 80 Lizard parameters loaded in both evaluations. The gate table is identical to run 1.
+
+| Task (0-shot) | Accuracy | Normalized accuracy | n |
+|---|---|---|---|
+| PIQA | **57.7 ± 1.2** | 56.3 ± 1.2 | 1,838 |
+| ARC-Easy | **35.7 ± 1.0** | 34.7 ± 1.0 | 2,376 |
+
+Comparison with the other stage 1 models and the references:
+
+| Model | PIQA | ARC-Easy | Source |
+|---|---|---|---|
+| fd128, LoLCATs recipe, bf16 | 57.6 ± 1.2 | Not measured | [Stage difference](stage-difference.md), quick check 1 |
+| fd32, recipe of the paper, bf16 | 55.8 ± 1.2 | 34.1 ± 1.0 | [Paper-LR experiment](paper-lr.md), run 2 |
+| fd32, recipe of the paper, float32 | **57.7 ± 1.2** | **35.7 ± 1.0** | This run |
+| fd128, after stage 2 (the Lizard model) | 67.95 ± 1.09 | 54.8 | [Document 7](../07-results.md) |
+| Teacher, in the paper | 74.1 | 65.4 | Table 9 of the paper, newer harness |
+| Chance | 50.0 | Approximately 25 | 2 choices on PIQA. Mostly 4 choices on ARC-Easy. |
+
+| Difference | PIQA | ARC-Easy |
+|---|---|---|
+| float32 against bf16, same recipe | +1.9 points (approximately 35 questions), z ≈ 1.2 | +1.6 points (approximately 38 questions), z ≈ 1.2 |
+| float32 against fd128 with the LoLCATs recipe | +0.1 points, z ≈ 0.1 | – |
+
+The z values use unpaired SEs. A paired comparison on the same questions would be more sensitive, but `compare_stages.py` compares models only inside one run.
+
+**Finding 6: PIQA and ARC-Easy are a little higher than with bf16, but the difference is not clear**. PIQA is 57.7 against 55.8, and ARC-Easy is 35.7 against 34.1 (z ≈ 1.2 for both). Both differences have the same direction as the lower validation loss (4.95 against 8.16).
+
+**Finding 7: PIQA is the same as with the LoLCATs recipe**. This run gets 57.7, and fd128 with the LoLCATs recipe got 57.6 after stage 1. Thus the lower validation loss of the LoLCATs recipe (3.25 for fd128, 3.42 for fd32) does not give a higher PIQA accuracy after stage 1.
+
+**Finding 8: all stage 1 models stay far below the stage 2 model and the teacher**. PIQA is 10 points below the stage 2 model (67.95) and 16 points below the teacher (74.1 in the paper). ARC-Easy is 19 points below the stage 2 model (54.8) and 30 points below the teacher (65.4).
+
 ### Interpretation
 
 - **The outcome is the second row of the outcome table**. The validation loss is lower than 8.1641 but higher than 3.4219, and no layer of 1–15 saturates fully. Thus bf16 caused part of the problem. The recipe of the paper with float32 still gives a higher loss than the LoLCATs recipe.
@@ -248,12 +283,14 @@ The feature-map weights have an RMS of 0.086–0.131 and a maximum absolute valu
   - **Less training**. At a peak learning rate of 1e-3 with cosine decay, the weights can move much less in 1,178 steps than at a constant 1e-2. Factor 1 of section 12 gives this estimate. The feature-map weights are smaller than with the LoLCATs recipe, and the loss still decreased at the end (finding 4).
   - **The other differences from the paper**: β2 = 0.999, no gradient clipping, the decay to 0 and feature dimension 32.
 - The removal of the bf16 rounding of the target (D10) and of the prediction (D13) can also lower the loss a little. Thus a small part of the improvement from 8.16 to 4.95 can come from the precision of the loss, not from better weights. This document has no measurement of this part.
-- **MMLU does not follow the validation loss**. The four stage 1 models have validation losses from 3.25 to 8.16, but their MMLU-subset accuracies are all near chance. Thus the MMLU subset does not separate these stage 1 models. PIQA and ARC-Easy can show differences better.
+- **MMLU does not follow the validation loss**. The four stage 1 models have validation losses from 3.25 to 8.16, but their MMLU-subset accuracies are all near chance. Thus the MMLU subset does not separate these stage 1 models.
+- **PIQA and ARC-Easy separate the stage 1 models only a little**. On PIQA, all measured values are in a range of 2 points (55.8–57.7). On ARC-Easy, the range is 1.6 points (34.1–35.7). None of the differences is clear with unpaired SEs. Thus none of the recipes gives a stage 1 model that is clearly better on these tasks. But their validation losses differ by up to 2.5×.
+- **The stage 1 model alone is far from the teacher on every task** (finding 8). With the current recipes, stage 2 recovers most of the measured accuracy. A better stage 1 recipe must show its effect after stage 2, or with a more sensitive measure than these tasks. Examples are the error of each layer against the teacher, and the KL divergence of the logits (section 13.5 of the [gap analysis](../11-gap-analysis.md)).
 - This result is preliminary. It uses only the MMLU subset, and the comparisons use unpaired SEs.
 
 ### Open items
 
-1. **PIQA and ARC-Easy:** run the evaluation command with `TASKS="piqa arc_easy"`. Compare with 55.8 and 34.1 for the bf16 run with the same recipe.
+1. **More sensitive measures for stage 1**: the error of each layer against the teacher, and the KL divergence of the logits. Steps 1 and 3 of section 13.5 of the gap analysis describe them. Paired comparisons on the same questions would also help.
 2. **Separate the explanations of the remaining difference:**
    - The normalization of the gated branch (D1 in [math against code](../math-code-discrepancy.md)) and the sink hypothesis. Test them with the single-layer bench of section 13.5 of the gap analysis (step 5).
    - A float32 run with the LoLCATs recipe. It shows whether float32 changes the result of the high learning rate too.
