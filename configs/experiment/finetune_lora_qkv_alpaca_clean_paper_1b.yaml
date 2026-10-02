@@ -1,0 +1,61 @@
+# Stage 2 with the recipe of the Lizard paper, Table 13 (docs/experiments/stage2-config1.md):
+# finetune_lora_qkvo_alpaca_clean_1b.yaml with the stage 2 rows of Table 13 (peak learning rate 5e-4,
+# LoRA r = 8, alpha = 16, dropout 0 on Wq, Wk, Wv, 20M tokens) and its shared optimizer settings
+# (cosine schedule with a 10% warmup and a minimum ratio of 0.1, AdamW betas (0.9, 0.99), clipping 1.0)
+dataset:
+  name: alpaca_clean
+  dataset_config:
+    name: default
+    path: yahma/alpaca-cleaned
+    chunk_size: 2048
+    concat_data: true
+    cache_dir: "data/alpaca"
+  pretrained_model_config:
+    pretrained_model_name_or_path: "meta-llama/Meta-Llama-3-1B" # will be updated based on model_config
+    cache_dir: "/workspace/scratch/"
+  preprocess_config: null
+
+dataloader:
+  batch_size: 1
+  num_workers: 2
+  drop_last: false
+  pin_memory: true
+
+optimizer:
+  optim: adamw_torch_fused
+  lr: 5e-4           # Lizard paper, Table 13: peak learning rate of stage 2 (the LoLCATs config uses 1e-4)
+  weight_decay: 0.0
+  betas: [0.9, 0.99] # Lizard paper, Table 13 (the torch default is (0.9, 0.999)); eps stays 1e-8
+
+lr_scheduler:        # Lizard paper: cosine schedule with a 10% linear warmup and a minimum ratio of 0.1
+  lr_scheduler_type: cosine_warmup_min_lr  # one step per optimizer step
+  num_warmup_steps: 118             # 10% of the 1,178 optimizer steps of stage 2 (2 epochs x 589)
+  num_training_steps: 1178
+  min_lr_rate: 0.1                  # decays to 0.1x the peak (5e-5)
+
+trainer: # HuggingFace Trainer-like arguments
+  name: default_lm
+  bf16: true
+  train_split: train
+  val_split: validation
+  num_train_epochs: 2               # 2 x 4,714 sequences x 2,048 tokens = 19.3M tokens (Table 13: 20M)
+  gradient_accumulation_steps: 8
+  seed: 42
+  batch_size: 1
+  load_best_model_at_end: true
+  greater_is_better: false
+  metric_for_best_model: eval/loss
+  logging_steps: 100
+  evaluation_strategy: steps
+  max_steps: -1
+  eval_steps: 100
+  max_eval_batches: null
+  max_grad_norm: 1.0                # Lizard paper, Table 13: clip the global gradient norm at 1.0
+
+finetune:
+  method: lora
+  kwargs:
+    r: 8                            # Lizard paper, Table 13
+    lora_alpha: 16                  # Lizard paper, Table 13
+    lora_dropout: 0.0               # Lizard paper, Table 13
+    target_modules: ["q_proj", "k_proj", "v_proj"]  # Lizard paper, Table 13: Wq, Wk, Wv (the LoLCATs config adds o_proj)
