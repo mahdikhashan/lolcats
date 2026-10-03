@@ -1,0 +1,163 @@
+# 13. Lizard attention v2
+
+**Status:** Implemented and tested on CPU (37 checks pass, float64). No training run used v2 yet.
+
+v2 is a new attention file: `src/model/linear_attention/lizard_attention_v2.py`. It has the layer of v1 (`lizard_attention.py`) and a model config option for each reading of the paper. It also has an option for each code change of [gap analysis 2](12-gap-analysis-2.md) (C1–C6). The default options give the outputs of v1 exactly. Thus each experiment changes one option, as section 5.2 of gap analysis 2 requires. v1 does not change.
+
+## Why v2
+
+[Gap analysis 2](12-gap-analysis-2.md) ranks "a limit for each head" as the main cause of the gap. The two XAI experiments measured this limit:
+
+- **Window share at its ceiling**. In layer 15, head 14, the window branch gives 0.365 of the weight. This value is the ceiling α / (1 + α) of the layer ([sample attention weights](experiments/xai-sample-attention-weight.md), finding 6).
+- **Local heads match worst**. The more local a teacher head is, the larger its TV distance to Lizard (correlation −0.75 to −0.78).
+- **Equal long-range share in a layer**. All heads of a layer get almost the same long-range share (standard deviation 0.034–0.048, teacher 0.126).
+- **Two heads give 20% of the loss**. Layer 15, heads 14 and 23 give approximately 20% of the stage 1 loss ([layer-wise MSE](experiments/xai-layer-wise-mse.md), finding 5).
+
+The [math against code](math-code-discrepancy.md) comparison lists the readings of the paper that the code chose: D1 (normalization), D2 (shared maps), D3 (softmax), D5 (sink term). v2 makes these choices options.
+
+## Plan
+
+1. **Check the source**. Mathbox skill `literature-check`: what does version 4 of the paper state for D1, D2, D3, D5 and α?
+2. **Check the derivations**. Mathbox skill `proof-audit`: the claims P1–P5 that the options depend on.
+3. **Implement**. One option for each reading and each code change. The defaults give v1. The parameter names stay those of v1, so the scripts and the checkpoints still work.
+4. **Test**. Mathbox skill `computation-audit`. The parallel form against a loop form of [math formulas](math-formula.md), the decode form against the parallel form, and the defaults against v1. Negative controls show that the checks find errors.
+5. **Document**. This document and the model config.
+
+## Options
+
+| Option | Values (default first) | Source | Reading of the paper (version 4) |
+|---|---|---|---|
+| `gla_norm` | `row`, `none`, `joint` | D1, C3 | `row` is the parallel form of Section 3.1 (v1). `none` is the recurrent form of Section 3.1 and the matrix form of Section 4. `joint` is one denominator for both branches and the sinks, as in LoLCATs. |
+| `alpha_per_head` | `false`, `true` | C1, X1 | The paper gives one α. The LoLCATs default has one window factor for each head. |
+| `alpha_init`, `train_alpha` | `1.0`, `true` | D14 | The paper does not call α learnable (see "Literature check"). `train_alpha: false` keeps α at `alpha_init`. |
+| `feature_map_per_head` | `false`, `true` | D2, C2 | Probably the reading of Appendix B: the LoLCATs default has one map for each head. |
+| `feature_activation` | `softmax`, `exp` | D3 | Table 13 gives softmax. Section 4 gives exp. |
+| `gate_per_head` | `false`, `true` | C4, X3 | A deviation. Table 4 of the paper prefers one gate for all heads. |
+| `gate_bias_init` | `null`, a number | C6 | Not in the paper. With 3.0, the gate starts at γ = σ(3) ≈ 0.953. |
+| `window_rope` | `false`, `true` | C5 | A deviation. Lizard has no RoPE. |
+
+These parts stay as in v1:
+
+- the sink term $\sum_j \exp(t_j)$ (D5, see P4),
+- one set of 4 sink logits for each layer,
+- the gated branch without RoPE,
+- the Lizard calculations in at least float32,
+- the dense parallel form (D7),
+- the loss and the target of stage 1 (D10–D15).
+
+## Literature check
+
+**Source**. Lizard, arXiv:2507.09025, version 4 (18 Apr 2026). The check used a text extraction of the PDF that the user supplied. The equations in the extraction are hard to read. Thus the check compared them with [math formulas](math-formula.md), which comes from images of version 4. The check did not cache the source.
+
+**Checks performed**. Authentication: the arXiv stamp in the extraction (version 4). Extraction: the passages below. Application: one row for each question.
+
+| Question | What version 4 states | Verdict |
+|---|---|---|
+| D1: denominator of the gated branch | Section 3.1, parallel form: a denominator. Section 3.1, recurrent form: $\mathbf{S}_i = \boldsymbol{\Gamma}_i \mathbf{S}_{i-1} + \phi_k(\mathbf{k}_i)\mathbf{v}_i^\top$, $\hat{\mathbf{y}}_i = \phi_q(\mathbf{q}_i)^\top \mathbf{S}_i$, no denominator. Section 4, matrix form for training: no denominator. | Unverified. The paper has both forms, and they are not equal (P1). v2 offers both. |
+| D2: one map for each head | Appendix B: "For the other designs, we adopted the default values used by prior work (Zhang et al., 2025)", which is LoLCATs. LoLCATs uses `untied_head_einsum`, one map for each head. | Conditional: one map for each head, if "other designs" includes the feature map. |
+| D3: activation | Section 4: $\phi(\mathbf{x}) = [\exp(\mathbf{x}\mathbf{W}) \oplus \exp(-\mathbf{x}\mathbf{W})]$, and "this exponential-based structure is critical" for the log-space form. Table 13: "Hedgehog Feature Activation: Softmax". | Unverified. The two statements disagree. P3 shows that the log-space form of Section 4 needs exp. |
+| D5: sink term | Section 3.1 writes $\sum_{j} t_j$ in the denominator. The text calls $t_j$ "the logit of a meta-memory token". | Conditional: $\sum_j \exp(t_j)$, if "logit" has its usual meaning. |
+| α | Section 3.1: $\hat{\mathbf{Y}}_{lizard} = \hat{\mathbf{Y}}_{gate} + \alpha \cdot \hat{\mathbf{Y}}_{anchor}$. No head index. The Figure 1 caption lists the learnable modules as φ, $\mathbf{W}_\gamma$ and $\mathbf{t}$. The loss lists the same three. | Not stated if α is learnable. [Math formulas](math-formula.md) and D14 say that the paper calls α learnable. The text of version 4 does not support this. |
+| Sinks | $\mathbf{t} \in \mathbb{R}^m$, no head index. A cache of $w + m$ tokens. | Verified: one set for each layer, as in v1. |
+
+**LoLCATs defaults** (from `linear_window_attention_tk.py` and `feature_map.py` in this repository):
+
+- one window factor $\sigma(a_h)$ for each head, start value σ(−2.197) ≈ 0.1,
+- one feature map for each head,
+- one denominator for both branches.
+
+The LoLCATs code divides the window weights by $\exp(\max_t s_{it})$, but not the linear weights. Thus its effective window factor changes with the row. The `joint` option of v2 applies the same shift to both branches, so the result is exact.
+
+## Proof audit
+
+Mathbox skill `proof-audit`. Self-review of the revision `a677e3c` (`docs/math-formula.md`, `docs/math-code-discrepancy.md`, gap analysis 2, section 3.1). The derivations are by hand. A float64 script recomputed the smallest cases (6 positions).
+
+| Claim | Verdict | Decisive evidence |
+|---|---|---|
+| **P1a**: The recurrent form without a denominator equals the parallel form without a denominator | Proved as written (a scalar gate for each position, also one for each head) | Induction: $\mathbf{S}_i = \sum_{t \le i} \prod_{l=t+1}^{i} \gamma_l\, \phi_k(\mathbf{k}_t)\mathbf{v}_t^\top$. Recomputed difference 4.4e-16. The matrix form of Section 4 gives the same weights $c_i / c_t$, if $c_t > 0$. |
+| **P1b**: With a second state $\mathbf{z}_i = \gamma_i \mathbf{z}_{i-1} + \phi_k(\mathbf{k}_i)$, the recurrent form equals the normalized parallel form | Proved as written | The same induction for $\mathbf{z}_i$. The denominator is at least $\phi_q(\mathbf{q}_i)^\top\phi_k(\mathbf{k}_i) > 0$, because the features are positive. Recomputed difference 2.2e-16. |
+| **P2**: The window share of a head is at most α / (1 + α) | Correct only for α ≥ 0. The code does not limit α. | The gated branch sums to 1, and the window branch sums to $\rho_i \le 1$. The share is $\alpha\rho_i / (1 + \alpha\rho_i)$, which increases with $\alpha\rho_i$. |
+| P2 with one α for each head (C1) | The ceiling stays: α_h / (1 + α_h) for each head | The gated branch still adds a weight of exactly 1 to each row. |
+| P2 without a denominator (C3-i) | The ceiling disappears | The gated weight of a row, $\mu_i = \sum_t \prod \gamma\, \phi_q^\top\phi_k$, has no constant value. With softmax features, $0 < \phi_q^\top\phi_k \le 2$, so $\mu_i \le 2i$. With exp features, $\mu_i$ has no upper limit. |
+| P2 with one joint denominator (C3-ii) | The ceiling disappears. Each row is a weighted mean of values with total weight below 1. This needs α ≥ 0, so `joint` uses max(α, 0). | Test 7 shows a share of more than 0.7 / 1.7 with `joint`. |
+| **P3**: The log-space form of Section 4 equals $(\phi(\mathbf{Q}) \odot \mathbf{C})(\phi(\mathbf{K}) / \mathbf{C})^\top$ | Correct only for the exp activation. Refuted for the softmax activation of Table 13. | $\mathrm{softmax}(\mathbf{x}\mathbf{W} + \log c) = \mathrm{softmax}(\mathbf{x}\mathbf{W})$ for a scalar $c$. Thus the gate disappears. Recomputed: equal to the ungated map (1e-16), and 0.71 away from the gated map. |
+| P3, numerical range | The form over the whole sequence overflows | At γ = 0.5 (the start value of v1), $1/c_t$ is finite only up to $t = 126$ in float32 and in bfloat16. The paper mentions chunkwise operations. Only a chunkwise form can avoid this. |
+| **P4**: The written sink term $\sum_j t_j$ can make the denominator of the window branch 0 or negative | Proved | With $m = 4$ and one key with score 0: $t_j = -1$ gives a denominator of −3, and $t_j = -0.25$ gives 0. With $\sum_j \exp(t_j)$, the denominator is always positive. |
+| **P5**: The decode forms of `joint` and `window_rope` equal their parallel forms | Proved, with a condition | `joint`: P1b for the gated sums, and the same window sums over the cached keys. `window_rope`: RoPE scores depend only on $t - i$, so cached keys rotated at their own positions are correct. The condition: the model passes the true positions when it decodes. |
+
+**Remaining gaps**. The paper itself does not settle D1, D3 and α. v2 does not settle them either. It makes them testable.
+
+## Implementation
+
+| Part | File |
+|---|---|
+| Attention class `LolcatsLizardAttentionV2` | `src/model/linear_attention/lizard_attention_v2.py` |
+| Attention type `lolcats_llama_lizard_v2` | `src/model/convert_model.py`, `src/model/linear_attention/__init__.py` |
+| Model config, all options at their defaults | `configs/model/distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32.yaml` |
+| Tests | `tests/test_lizard_attention_v2.py` |
+| Evaluation summary | `scripts/compare_stages.py`: the mean α for α with one value for each head, and `W_gamma.bias` in the checkpoint check |
+
+- **Same parameter names as v1**: `phi_q.weight`, `phi_k.weight`, `W_gamma.weight`, `meta_tokens` and `alpha_blend`. `W_gamma.bias` exists only with `gate_bias_init`. With `feature_map_per_head`, `phi_q.weight` has the shape (32, feature dimension, 64).
+- **α with `train_alpha: false`** is a buffer. Thus it is not trained and not in the checkpoint of trainable weights.
+- **Generation** uses `LizardAttentionCache` of v1. With `window_rope`, the cache holds the keys after RoPE.
+- **XAI**: `branch_weights(q, k, gamma, rope)` returns the dense weights of the two branches, with α in the window weights. Their sum times v is the output of the layer (test 5). `attention_weights.py`, `layer_mse.py` and `ablate.py` still calculate the v1 form. For v2 options, they must use `branch_weights`.
+
+## Computation audit
+
+Mathbox skill `computation-audit`.
+
+**Contract**. Claim: for each option, v2 calculates the formulas of [math formulas](math-formula.md) as the table "Options" reads them. With the default options, it gives the outputs of v1. Assertion tested: on tiny random layers in float64, the relative error is below 1e-10, or the outputs are identical. Non-claims: bfloat16 behavior, layers of the size of Llama-3.2-1B (except the parameter counts), speed, and the effect of an option on the model quality.
+
+**Inputs**. A LlamaAttention with hidden size 32, 4 query heads, 2 key/value heads, head dimension 8, feature dimension 6, window 4 and 11 positions. All weights are random, also the Lizard parameters. The start values (γ = 0.5, the same α for each head) would hide errors in the options for each head. Seeds 0–7 with `torch.manual_seed`.
+
+| # | Check | Options | Result |
+|---|---|---|---|
+| 1 | Defaults against v1: forward pass, distillation outputs, and prefill with token-by-token decode | Defaults | Identical (`torch.equal`) |
+| 2 | Parallel form against the loop form of the math document | 12 sets: each option alone, and 2 combinations | 12 pass, relative error < 1e-10 |
+| 3 | Decode against the parallel form: prefill 3 tokens, one call with 2 tokens, then one token at a time past the window | The same 12 sets | 12 pass, relative error < 1e-10 |
+| 4 | A change at position 7 does not change the outputs before position 7 | 4 sets | 4 pass |
+| 5 | `branch_weights` times v gives the output. The weights are causal, non-negative and inside the window. `row`: the gated weights sum to 1. `joint`: each row sums to less than 1. | 5 sets | 5 pass |
+| 6 | Parameter counts at the size of Llama-3.2-1B (feature dimension 32): C1 +31, C2 4,096 → 131,072, C4 +31 × 2,048, C6 +1 for each layer. These agree with the table in section 5.2 of gap analysis 2. | C1, C2, C4, C6 | Pass |
+| 7 | Window share: `row` stays at most 0.7 / 1.7. `joint` goes above it. | `row`, `joint` | Pass |
+| 8 | In a tiny `LolcatsLlamaForCausalLM` (2 layers): conversion, the teacher mode, the evaluation path with `use_cache=True`, and generation with prefill and decode | `all_joint` combination | Pass, relative error < 1e-6 (the model casts the logits to float32) |
+
+**Negative controls**. Four errors went into a copy of v2, one at a time. Each error made checks fail:
+
+| Error | Failed checks |
+|---|---|
+| `joint`: no sinks in the denominator | 7 |
+| Decode: the gate of head 0 for all heads | 4 |
+| `window_rope`: keys without RoPE in the prefill cache | 4 |
+| `exp`: the wrong sign in the second half of the map | 2 |
+
+**Command** (from the repository root):
+
+```bash
+python -m pytest -q tests/test_lizard_attention_v2.py
+```
+
+**Environment**: CPU, Python 3.11, torch 2.0.1, transformers 4.43.1, pytest 9.1.1. Result: 37 passed in approximately 3 seconds. The manifest of the run with the provenance runner of `computation-audit` is in [`lizard-attention-v2/`](lizard-attention-v2/).
+
+**Outcome**: implementation and finite assertion verified in the stated range. The loop reference comes from the math document, not from the code. But it reads the formulas as the table "Options" does. Thus it cannot find a wrong reading of the paper.
+
+## How to run an experiment
+
+1. Copy the v2 model config. Change one option. Put the change in the file name, for example `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead.yaml`.
+2. Merge the config, then build a new Docker image ([document 3](03-infrastructure.md)).
+3. Run stage 1 on HF Jobs:
+
+```bash
+make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=3h \
+  ARGS="--model_config <the new config> --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b --no_finetune"
+```
+
+4. Compare with config 1 of the [second round](experiments/second-round.md) (validation loss 3.9764), then run `layer_mse.py` and the MMLU subset, PIQA and ARC-Easy.
+
+The order of section 5.2 of gap analysis 2 applies: C1 (`alpha_per_head`) first, then C2 (`feature_map_per_head`), then C3 (`gla_norm`) or C6 (`gate_bias_init`). C4 (`gate_per_head`) and C5 (`window_rope`) come last, because they deviate most from the paper.
+
+## Limits
+
+- **XAI scripts**: `attention_weights.py`, `layer_mse.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.
+- **`gla_norm: none` with `feature_activation: exp`**: the gated weights have no upper limit (P2). Training can become unstable.
+- **`gla_norm: joint`** uses max(α, 0). If training pushes α below 0, the window branch stops, and α gets no gradient.
+- **Not tested**: bfloat16, sequences of 2,048 tokens, and the speed and memory of the options for each head.
