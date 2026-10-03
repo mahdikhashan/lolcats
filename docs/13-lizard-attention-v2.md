@@ -234,16 +234,17 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 - The MSE decreases in all 16 layers. The largest decreases are in layers 10 and 13–15.
 - Layer 15 still gives 28.9% of the loss (config 1: 29.7%).
 - In layer 2, the Lizard output is still farther from the teacher than an output of 0 (relative MSE above 1).
+- Layer 15, head 14: MSE 0.234 → 0.216 (−7.8%), 11.5% → 11.1% of the loss. Head 23: 0.146 → 0.145 (−0.7%), 7.2% → 7.4% of the loss. Together, the two heads still give 18.5% of the loss (config 1: 18.7%).
 
 **Check against the gain rule of the plan** (section "Experiment plan with fewer runs"):
 
 | Part of the rule | Result | Met |
 |---|---|---|
 | Validation loss at least 5% below config 1 | −4.2% | No |
-| Lower MSE of layer 15, head 14 | Layer 15: −6.6%. The value of head 14 alone is not read from the result file yet. | Layer 15: yes. Head 14: open. |
+| Lower MSE of layer 15, head 14 | Head 14: 0.234 → 0.216 (−7.8%), 11.5% → 11.1% of the loss. Layer 15: −6.6%. | Yes |
 | No accuracy loss of more than approximately 2 points | MMLU −2.8 and ARC-Easy −1.9, neither clear | Borderline |
 
-**Finding 1: one α for each head alone gives no gain by the rule of the plan**. The loss is 4.2% lower. The accuracies do not improve. As in the earlier runs, a lower loss does not give higher accuracies ([stage 2 on config 1](experiments/stage2-config1.md), finding 3).
+**Finding 1: one α for each head alone gives no gain by the rule of the plan**. The loss is 4.2% lower, below the limit of 5%. The MSE of layer 15, head 14 is 7.8% lower. The accuracies do not improve. As in the earlier runs, a lower loss does not give higher accuracies ([stage 2 on config 1](experiments/stage2-config1.md), finding 3).
 
 **Finding 2: the result agrees with P2**. With one α for each head, each head still has a ceiling, α_h / (1 + α_h). The normalized gated branch still adds a weight of exactly 1 to each row. Thus C1 alone can only change the compromise between the heads. It cannot remove the limit.
 
@@ -257,12 +258,12 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 | Layer 15, head 23 | 0.61 | 0.761 | Above the mean | 0.432 | 0.365 |
 | Layer 0, head 2 (one token back) | Not measured | 0.436 | Below the mean (0.508) | 0.304 | 0.321 |
 
-- **Layer 15, head 14**. Its ceiling rose from 0.365 to 0.461. The teacher puts 0.913 of its weight inside the window. Thus the ceiling still binds. A larger α would also make the total weight of the row larger than 1, because the gated branch always adds 1 (D1). Thus α = 0.855 is the best compromise for this head, and only a change of the normalization (C3) can remove the ceiling.
+- **Layer 15, head 14**. Its ceiling rose from 0.365 to 0.461. The teacher puts 0.913 of its weight inside the window. Thus the ceiling still binds, and the MSE of this head decreased by only 7.8%. A larger α would also make the total weight of the row larger than 1, because the gated branch always adds 1 (D1). Thus α = 0.855 is the best compromise for this head, and only a change of the normalization (C3) can remove the ceiling.
 - **Layer 0, head 2** got a smaller α than the mean of its layer. This head attends to the previous token. Without RoPE, the window branch cannot find "one token back" (section 3.3 of gap analysis 2). Thus a larger α cannot help this head. This supports C5 (`window_rope`) for this type of head, in R4.
 
 **Finding 4: on MMLU, the answers are still at the level of guessing**. A model that ignores the questions and uses the same letter shares gets 24.6. C1 gets 23.9.
 
-**Open item**: the MSE of layer 15, head 14 from `results/layer_mse/v2_alphahead.json` (config 1: 0.234, 11.5% of the loss).
+**Decision for the plan**: C1 alone gives no gain. R1 is the next run.
 
 ## Experiment plan with fewer runs
 
