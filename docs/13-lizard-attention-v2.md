@@ -100,7 +100,7 @@ Mathbox skill `proof-audit`. Self-review of the revision `a677e3c` (`docs/math-f
 - **Same parameter names as v1**: `phi_q.weight`, `phi_k.weight`, `W_gamma.weight`, `meta_tokens` and `alpha_blend`. `W_gamma.bias` exists only with `gate_bias_init`. With `feature_map_per_head`, `phi_q.weight` has the shape (32, feature dimension, 64).
 - **α with `train_alpha: false`** is a buffer. Thus it is not trained and not in the checkpoint of trainable weights.
 - **Generation** uses `LizardAttentionCache` of v1. With `window_rope`, the cache holds the keys after RoPE.
-- **XAI**: `branch_weights(q, k, gamma, rope)` returns the dense weights of the two branches, with α in the window weights. Their sum times v is the output of the layer (test 5). `attention_weights.py`, `layer_mse.py` and `ablate.py` still calculate the v1 form. For v2 options, they must use `branch_weights`.
+- **XAI**: `branch_weights(q, k, gamma, rope)` returns the dense weights of the two branches, with α in the window weights. Their sum times v is the output of the layer (test 5). `attention_weights.py` and `ablate.py` still calculate the v1 form. For v2 options, they must use `branch_weights`. `layer_mse.py` uses the outputs of the layer itself, so it is correct for all v2 options.
 
 ## Computation audit
 
@@ -194,9 +194,76 @@ scripts/compare_stages.sh 2>&1 | tee eval-v2-alphahead.log
 
 The final text generation check of `distill_llama.py` then stopped with an error about `token_type_ids`. The tiny test tokenizer gives this field, and the Llama tokenizer does not. The v1 config gave the same error in the same test.
 
+## Experiment plan with fewer runs
+
+**The problem**. v2 has 8 options. All their combinations give 3 × 2⁷ = 384 configs. One option at a time needs 8 stage 1 runs before any combination. Each stage 1 run in float32 takes approximately 2.5 hours on the H200 (approximately $12.50 at $5.00 for each hour).
+
+**Three rules make the plan shorter**:
+
+1. **Drop options without evidence**. Options that no XAI result points at, or that have a known problem, are not in the plan (table "Options not in the plan").
+2. **Test a group in one run**. The first run tests the three parts of the per-head limit together (section 3 of gap analysis 2). If the group gives no gain, one run removes all three options.
+3. **Remove one option only after a gain**. These runs remove only the deviations from the paper. If a run without a deviation is as good, the plan keeps the config that is closer to the paper.
+
+**Gain**: a stage 1 validation loss at least 5% below the reference run, and a lower MSE of layer 15, head 14 in `layer_mse.py`. The accuracies (MMLU subset, PIQA, ARC-Easy) must not fall by more than approximately 2 points. The project has one seed for each run, so a difference of a few percent is not clear.
+
+| Run | v2 options (all others keep their defaults) | Question | Run only if | Decision |
+|---|---|---|---|---|
+| B0 | None: config 1 of the second round | Reference | Exists (validation loss 3.9764) | – |
+| **R1** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: joint` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6 |
+| R2 | R1 without `gla_norm: joint` | Is the joint denominator (a deviation) necessary? | R1 has a gain | R2 within 2% of R1: keep R2 |
+| R3 | R1 without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1 has a gain, and the C1 run or X1 shows a gain of C1 | R3 within 2% of R1: keep R3 |
+| W | The best config of R1–R3, with the fewest deviations | – | – | – |
+| R4 | W + `window_rope` + `gate_bias_init: 3.0` | Do position information for the local heads and a gate start near 1 add a gain? | Always after W | No gain: drop both options |
+| R5 | W + `gate_bias_init: 3.0` | Which of the two options gives the gain? The effect of `window_rope` is R4 − R5. | R4 has a gain | Keep the options with a gain |
+| R6 | The best config so far + `gate_per_head` | Does one gate for each head add a gain? | X3 predicts a decrease of the loss of 5% or more | Keep only with a gain |
+| R7 | Stage 2 of the final config (float32, the stage 2 recipe of [stage 2 on config 1](experiments/stage2-config1.md)) | Final scores | Always, last | Compare with stage 2 on config 1 (PIQA 67.7, ARC-Easy 54.9) and with the paper |
+
+**Number of runs**:
+
+- **R1 has no gain**: 1 stage 1 run. The plan then stops.
+- **Normal case**: 4–5 stage 1 runs (R1, R2, R3, R4, maybe R5) and 1 stage 2 run.
+- **One option at a time**: at least 8 stage 1 runs, before any combination.
+
+**The C1 run** (`..._alphahead` config). If it already started, keep it. It gives the effect of C1 alone, which is the decision for R3.
+
+**Screens without training** (optional, A10, forward passes only). They need a small extension of `layer_mse.py` with `branch_weights`:
+
+- X1: the best α for each head, from the outputs of config 1. It decides R3.
+- X2: the best scale of the gated branch for each head. It predicts the effect of `gla_norm`.
+- X3: the best constant gate for each head. It decides R6.
+
+**Shorter screens** (optional). R2–R6 can run for 1 epoch (approximately 1.25 hours), and only the final config for 2 epochs. This halves their cost. But in all float32 runs, the validation loss still decreased at the end, so the order of two configs can change.
+
+### Options not in the plan
+
+| Option | Why it is not in the plan | When to run it |
+|---|---|---|
+| `gla_norm: none` | It removes the ceiling as `joint` does (P2), but the total weight of a row has no constant value (up to 2i with softmax features). `joint` is the LoLCATs default. | Only if the thesis needs the recurrent form of the paper |
+| `feature_activation: exp` | Only the log-space form of Section 4 needs it (P3), and v2 uses the dense form. No XAI result points at it. With `gla_norm: none`, its weights have no upper limit. | Only for the reading question D3 |
+| `train_alpha: false`, `alpha_init` | It conflicts with `alpha_per_head` in R1. It answers only a reading question: the paper does not call α learnable. | Only for the reading question of α |
+
+### Run R1
+
+**Config**: `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint`. The stage 1 recipe is config 1 of the second round, as in B0.
+
+```bash
+make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=4h \
+  ARGS="--model_config distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b --no_finetune"
+```
+
+- **Time**: approximately 2.5 hours. A map for each head does the same calculation for each head as the shared map. The joint denominator adds no matrix product.
+- **Checkpoint**: `checkpoints/distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b-m=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt`
+- **Evaluation**: the command of "Experiment C1", with `MODEL_CONFIG=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint`.
+- **CPU check**. `distill_llama.main()` trained stage 1 with this config on a tiny Llama (3 layers, 4 heads). The checks:
+  - The layers were `LolcatsLizardAttentionV2`.
+  - `phi_q.weight` had the shape (4, 8, 16), one map for each head.
+  - `alpha_blend` had the shape (4,).
+  - The checkpoint got the name above.
+  - The final text generation check stopped with the `token_type_ids` error of the tiny test tokenizer, as in "Experiment C1".
+
 ## Limits
 
-- **XAI scripts**: `attention_weights.py`, `layer_mse.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.
+- **XAI scripts**: `attention_weights.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `layer_mse.py` is correct for all v2 options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.
 - **`gla_norm: none` with `feature_activation: exp`**: the gated weights have no upper limit (P2). Training can become unstable.
 - **`gla_norm: joint`** uses max(α, 0). If training pushes α below 0, the window branch stops, and α gets no gradient.
 - **Not tested**: bfloat16, sequences of 2,048 tokens, and the speed and memory of the options for each head.
