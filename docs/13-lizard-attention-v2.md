@@ -217,7 +217,8 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 **Gates and Lizard parameters** (the same 5-shot prompt as for config 1):
 
-- The mean α of the layers is 0.508–0.666 (config 1: 0.472–0.644). The values of the 32 heads are in `lizard.json` of each task folder (`alpha_per_head`). The pasted summary does not show them.
+- The mean α of the layers is 0.508–0.666 (config 1: 0.472–0.644). The values of the 32 heads are in `lizard.json` of each task folder (`alpha_per_head`).
+- The heads of a layer now have different α values, with a standard deviation of 0.045–0.122. In layer 1, the values go from 0.45 to 1.04. The start value was 1.0 for all heads.
 - The sink logits, ‖W_γ‖ and the RMS of the feature maps are almost the same as in config 1.
 - The gated branch keeps more weight after 512 tokens in 14 of the 16 layers. Examples: layer 9 keeps 0.79 (config 1: 0.48), and layer 10 keeps 0.91 (0.72). Layers 7 and 13 keep less (0.17 against 0.35, and 0.87 against 0.88). These values come from one prompt.
 
@@ -233,11 +234,22 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 **Finding 2: the result agrees with P2**. With one α for each head, each head still has a ceiling, α_h / (1 + α_h). The normalized gated branch still adds a weight of exactly 1 to each row. Thus C1 alone can only change the compromise between the heads. It cannot remove the limit.
 
-**Finding 3: the gate keeps a longer memory in most layers**. This agrees with the mechanism of section 3.3 of gap analysis 2. If local heads can take more from the window branch, the shared gate can stay nearer to 1 for the other heads. This is a hypothesis. The α values of the single heads can test it. The local heads (layer 0, head 2, and layer 15, head 14) should have a larger α.
+**Finding 3: the gate keeps a longer memory in most layers**. This agrees with the mechanism of section 3.3 of gap analysis 2. If local heads can take more from the window branch, the shared gate can stay nearer to 1 for the other heads. This is a hypothesis.
+
+**Finding 5: the local head with the largest error gets the largest α of its layer, but its ceiling stays far below the teacher**:
+
+| Head | Teacher weight inside the window | α (C1) | Rank in the layer | Ceiling α / (1 + α), C1 | Ceiling, config 1 |
+|---|---|---|---|---|---|
+| Layer 15, head 14 | 0.913 | 0.855 | 1 of 32 (layer mean 0.574) | 0.461 | 0.365 |
+| Layer 15, head 23 | 0.61 | 0.761 | Above the mean | 0.432 | 0.365 |
+| Layer 0, head 2 (one token back) | Not measured | 0.436 | Below the mean (0.508) | 0.304 | 0.321 |
+
+- **Layer 15, head 14**. Its ceiling rose from 0.365 to 0.461. The teacher puts 0.913 of its weight inside the window. Thus the ceiling still binds. A larger α would also make the total weight of the row larger than 1, because the gated branch always adds 1 (D1). Thus α = 0.855 is the best compromise for this head, and only a change of the normalization (C3) can remove the ceiling.
+- **Layer 0, head 2** got a smaller α than the mean of its layer. This head attends to the previous token. Without RoPE, the window branch cannot find "one token back" (section 3.3 of gap analysis 2). Thus a larger α cannot help this head. This supports C5 (`window_rope`) for this type of head, in R4.
 
 **Finding 4: on MMLU, the answers are still at the level of guessing**. A model that ignores the questions and uses the same letter shares gets 24.6. C1 gets 23.9.
 
-**Open items**: `layer_mse.py` on this checkpoint (layer 15, head 14), and the α values of the single heads.
+**Open item**: `layer_mse.py` on this checkpoint (layer 15, head 14).
 
 ## Experiment plan with fewer runs
 
