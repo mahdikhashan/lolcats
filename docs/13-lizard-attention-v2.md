@@ -1,6 +1,6 @@
 # 13. Lizard attention v2
 
-**Status:** Implemented and tested on CPU (37 checks pass, float64). No training run used v2 yet.
+**Status:** Implemented and tested on CPU (37 checks pass, float64). One stage 1 run finished: C1, one α for each head (validation loss 3.8092, −4.2% against config 1, no accuracy gain). See "Experiment C1".
 
 v2 is a new attention file: `src/model/linear_attention/lizard_attention_v2.py`. It has the layer of v1 (`lizard_attention.py`) and a model config option for each reading of the paper. It also has an option for each code change of [gap analysis 2](12-gap-analysis-2.md) (C1–C6). The default options give the outputs of v1 exactly. Thus each experiment changes one option, as section 5.2 of gap analysis 2 requires. v1 does not change.
 
@@ -194,6 +194,51 @@ scripts/compare_stages.sh 2>&1 | tee eval-v2-alphahead.log
 
 The final text generation check of `distill_llama.py` then stopped with an error about `token_type_ids`. The tiny test tokenizer gives this field, and the Llama tokenizer does not. The v1 config gave the same error in the same test.
 
+#### Results of the C1 run (2026-10-04)
+
+- **Training**: stage 1 on HF Jobs with the command above. These notes do not record the job ID or the time.
+- **Evaluation**: `scripts/compare_stages.sh` with `MODELS=stage1`, on `student06`, GPU 0 (A10). Run directory: `results/stages/20261004-004056-v2-alphahead`. Code: lolcats `8bd2e88`, harness `b281b09`, torch 2.5.1.
+- **Comparison values**: config 1 of the [second round](experiments/second-round.md). The z values use unpaired SEs.
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Stored step | Stored loss |
+|---|---|---|---|---|---|---|
+| C1, stage 1 | `3f359abeed2415efeb4a9603f5ffd31a4e42b345b4deb91742fecd10628a881b` | 445,886 B | 98,880 | float32 (80 tensors) | 1100 | **3.8092** |
+
+The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α values in each of the 16 layers. In all three evaluations, all 80 Lizard tensors loaded with their values.
+
+| Measure | Config 1 (one α for each layer) | C1 (one α for each head) | Difference |
+|---|---|---|---|
+| Stage 1 validation loss | 3.9764 | **3.8092** | −4.2% |
+| MMLU subset | 26.7 ± 2.6 (76 right) | 23.9 ± 2.5 (68 right) | −2.8 points, z ≈ −0.8 |
+| PIQA | 57.3 ± 1.2 (normalized 56.6) | 57.5 ± 1.2 (normalized 55.0) | +0.2 points, z ≈ 0.1 |
+| ARC-Easy | 36.5 ± 1.0 (normalized 36.4) | 34.6 ± 1.0 (normalized 34.0) | −1.9 points, z ≈ −1.3 |
+| "A" / "B" / "C" / "D" on MMLU | 51.2% / 3.9% / 3.9% / 41.1% | 64.9% / 5.3% / 7.0% / 22.8% | – |
+| Letter mass, confidence, entropy | 0.019, 0.473, 1.726 bits | 0.015, 0.477, 1.720 bits | – |
+
+**Gates and Lizard parameters** (the same 5-shot prompt as for config 1):
+
+- The mean α of the layers is 0.508–0.666 (config 1: 0.472–0.644). The values of the 32 heads are in `lizard.json` of each task folder (`alpha_per_head`). The pasted summary does not show them.
+- The sink logits, ‖W_γ‖ and the RMS of the feature maps are almost the same as in config 1.
+- The gated branch keeps more weight after 512 tokens in 14 of the 16 layers. Examples: layer 9 keeps 0.79 (config 1: 0.48), and layer 10 keeps 0.91 (0.72). Layers 7 and 13 keep less (0.17 against 0.35, and 0.87 against 0.88). These values come from one prompt.
+
+**Check against the gain rule of the plan** (section "Experiment plan with fewer runs"):
+
+| Part of the rule | Result | Met |
+|---|---|---|
+| Validation loss at least 5% below config 1 | −4.2% | No |
+| Lower MSE of layer 15, head 14 | `layer_mse.py` has not run on this checkpoint yet | Not measured |
+| No accuracy loss of more than approximately 2 points | MMLU −2.8 and ARC-Easy −1.9, neither clear | Borderline |
+
+**Finding 1: one α for each head alone gives no gain by the rule of the plan**. The loss is 4.2% lower. The accuracies do not improve. As in the earlier runs, a lower loss does not give higher accuracies ([stage 2 on config 1](experiments/stage2-config1.md), finding 3).
+
+**Finding 2: the result agrees with P2**. With one α for each head, each head still has a ceiling, α_h / (1 + α_h). The normalized gated branch still adds a weight of exactly 1 to each row. Thus C1 alone can only change the compromise between the heads. It cannot remove the limit.
+
+**Finding 3: the gate keeps a longer memory in most layers**. This agrees with the mechanism of section 3.3 of gap analysis 2. If local heads can take more from the window branch, the shared gate can stay nearer to 1 for the other heads. This is a hypothesis. The α values of the single heads can test it. The local heads (layer 0, head 2, and layer 15, head 14) should have a larger α.
+
+**Finding 4: on MMLU, the answers are still at the level of guessing**. A model that ignores the questions and uses the same letter shares gets 24.6. C1 gets 23.9.
+
+**Open items**: `layer_mse.py` on this checkpoint (layer 15, head 14), and the α values of the single heads.
+
 ## Experiment plan with fewer runs
 
 **The problem**. v2 has 8 options. All their combinations give 3 × 2⁷ = 384 configs. One option at a time needs 8 stage 1 runs before any combination. Each stage 1 run in float32 takes approximately 2.5 hours on the H200 (approximately $12.50 at $5.00 for each hour).
@@ -211,7 +256,7 @@ The final text generation check of `distill_llama.py` then stopped with an error
 | B0 | None: config 1 of the second round | Reference | Exists (validation loss 3.9764) | – |
 | **R1** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: joint` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6 |
 | R2 | R1 without `gla_norm: joint` | Is the joint denominator (a deviation) necessary? | R1 has a gain | R2 within 2% of R1: keep R2 |
-| R3 | R1 without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1 has a gain, and the C1 run or X1 shows a gain of C1 | R3 within 2% of R1: keep R3 |
+| R3 | R1 without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1 has a gain | R3 within 2% of R1: keep R3 |
 | W | The best config of R1–R3, with the fewest deviations | – | – | – |
 | R4 | W + `window_rope` + `gate_bias_init: 3.0` | Do position information for the local heads and a gate start near 1 add a gain? | Always after W | No gain: drop both options |
 | R5 | W + `gate_bias_init: 3.0` | Which of the two options gives the gain? The effect of `window_rope` is R4 − R5. | R4 has a gain | Keep the options with a gain |
@@ -224,7 +269,7 @@ The final text generation check of `distill_llama.py` then stopped with an error
 - **Normal case**: 4–5 stage 1 runs (R1, R2, R3, R4, maybe R5) and 1 stage 2 run.
 - **One option at a time**: at least 8 stage 1 runs, before any combination.
 
-**The C1 run** (`..._alphahead` config). If it already started, keep it. It gives the effect of C1 alone, which is the decision for R3.
+**The C1 run** finished: −4.2% validation loss and no accuracy gain ("Experiment C1"). Thus `alpha_per_head` probably adds little to R1, and R3 probably keeps the gain of R1. R3 must run to show this. A config that removes C1 without a run would be untested.
 
 **Screens without training** (optional, A10, forward passes only). They need a small extension of `layer_mse.py` with `branch_weights`:
 
