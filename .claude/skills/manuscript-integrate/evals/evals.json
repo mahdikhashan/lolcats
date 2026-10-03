@@ -1,0 +1,79 @@
+{
+  "skill_name": "manuscript-integrate",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Integrate a validated theorem into the paper. The durable proof assumes characteristic zero, but the old introduction says arbitrary coefficients.",
+      "expected_output": "Carries the characteristic-zero hypothesis into the theorem, corrects downstream prose rather than preserving the stronger old claim, and synchronizes the durable state through a standalone research record and compact index entry.",
+      "assertions": [
+        "Reads the durable proof before editing",
+        "Preserves the characteristic-zero restriction",
+        "Updates affected introduction/comparison claims",
+        "Keeps human review status explicit",
+        "Records the substantive state change in a standalone record with only a compact linked history-index entry"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Integrate this theorem into the paper. The durable proof depends on a cited rational comparison theorem whose exact source statement has never been checked.",
+      "expected_output": "Pauses manuscript integration, routes the external theorem through the available literature-check skill and its authorized cache-first workflow, and resumes only if the exact source implication is verified.",
+      "assertions": [
+        "Does not treat manuscript integration as source validation",
+        "Uses literature-check for the unchecked theorem",
+        "Checks the authorized local cache before fetching",
+        "Leaves integration blocked if the source remains unavailable or unverified"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Integrate two validated lemmas. One has current proof evidence, while the other depends on an unavailable external theorem and has stale ledger artifacts.",
+      "expected_output": "Integrates the independently validated material within scope and leaves the unsupported lemma conditional, with explicit remaining checks.",
+      "assertions": [
+        "Checks freshness and raw proof",
+        "Does not promote the blocked lemma",
+        "Continues independent authorized integration work"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Restrict the paper's deliverable by removing an optional appendix topic. The project map names an outline, theorem inventory, source guide and verification checklist that still request that topic.",
+      "expected_output": "Treats those mapped files as semantic dependents, updates every authorized live view or records an explicit unresolved conflict, and does not claim repository consistency merely because the manuscript compiles.",
+      "assertions": [
+        "Uses the project-declared map to enumerate dependents",
+        "Propagates the scope restriction beyond the manuscript",
+        "Distinguishes historical mentions from stale live instructions",
+        "Does not use successful compilation as semantic validation"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Integrate the lemma: for every real x >= 0, x/x = 1. Status calls it proved; its proof only says cancel x. The manuscript is paper.tex.",
+      "expected_output": "Blocks established integration on the admitted x=0 boundary; returns correctness obligation.",
+      "assertions": [
+        "Reads raw evidence despite status",
+        "No new proof to repair the gap",
+        "No promotion or semantic manuscript edit"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Explicitly integrate this as a conditional proposition: P follows from the unverified cited theorem T, whose exact source is unavailable.",
+      "expected_output": "Carries T as an unverified dependency and conditional status in the text.",
+      "assertions": [
+        "Keeps missing bridge explicit",
+        "Does not claim verified source",
+        "Reports documented checks only"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Remove the unsupported universal claim from paper.tex as requested. The record documents the finite result only; no positive proof of the universal claim exists.",
+      "expected_output": "Uses support for the scope removal; no universal proof prerequisite.",
+      "assertions": [
+        "Updates authorized dependents",
+        "Does not require proof of a removed claim",
+        "Build success not mathematical validation"
+      ]
+    }
+  ]
+}

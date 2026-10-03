@@ -1,0 +1,66 @@
+[
+  {
+    "query": "Pursue the full conjecture by trying three approaches; keep going after a route fails.",
+    "should_trigger": true
+  },
+  {
+    "query": "Continue the investigation until we have a proof or a counterexample.",
+    "should_trigger": true
+  },
+  {
+    "query": "Try several alternative mechanisms for these two remaining proof obligations and keep going after failures.",
+    "should_trigger": true
+  },
+  {
+    "query": "Continue this research program across the remaining routes and maintain a concise current handoff.",
+    "should_trigger": true
+  },
+  {
+    "query": "Close out this completed research phase and compact its status and route history without starting another proof attempt.",
+    "should_trigger": true
+  },
+  {
+    "query": "Write a historical closeout for the finished descent program, keeping its historical outcome separate from later proofs.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit the proof of Lemma 2.",
+    "should_trigger": false
+  },
+  {
+    "query": "Proofread this paragraph.",
+    "should_trigger": false
+  },
+  {
+    "query": "Review our project and suggest what to try next, without doing research.",
+    "should_trigger": false
+  },
+  {
+    "query": "Record the failed route and its obstruction in the ledger.",
+    "should_trigger": false
+  },
+  {
+    "query": "Migrate our flat research log into program indexes, with a historical closeout for each old program.",
+    "should_trigger": false
+  },
+  {
+    "query": "Continue the research program after an inconclusive attempt; another proposed continuation remains untried.",
+    "should_trigger": true
+  },
+  {
+    "query": "Only record this inconclusive run and its remaining continuation in the existing .mathbox ledger.",
+    "should_trigger": false
+  },
+  {
+    "query": "Continue the full research program in this read-only host and return a deferred packet for material findings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Make one bounded attempt at Lemma 3 via Mayer–Vietoris, then stop.",
+    "should_trigger": false
+  },
+  {
+    "query": "Explain why this spectral sequence degenerates.",
+    "should_trigger": false
+  }
+]
