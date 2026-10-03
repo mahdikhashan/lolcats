@@ -1,6 +1,6 @@
 # Experiment: stage 2 on the second-round checkpoint (config 1)
 
-**Status:** The stage 2 config (`finetune_lora_qkv_alpaca_clean_paper_noclip_1b`), the float32 change and the CPU tests are ready. Stage 2 has not run yet.
+**Status:** Stage 2 training and evaluation finished on 2026-10-02 (MMLU subset, PIQA and ARC-Easy, stage 2 only). PIQA (67.7) and ARC-Easy (54.9) are within 0.3 points of Run 2. The stage 2 validation loss is 1.9158, against 2.252 for Run 2. The outcome is "within approximately 2 points of Run 2" (see "Results").
 
 ## Question
 
@@ -89,7 +89,7 @@ What the command does:
 5. The float32 model config sets the dtype of stage 2.
 6. Stage 2 trains for 2 epochs and pushes the stage 2 checkpoint to `HF_REPO`.
 
-**Time:** not measured for stage 2 in float32. The estimate is 6–9 hours:
+**Time:** measured in Run 1 (see "Results"): approximately 1.25 seconds for each sequence, thus approximately 3 hours 17 minutes for 2 epochs. The estimate before the run was 6–9 hours, and it was too high:
 
 - Stage 2 in bf16 took approximately 2 hours 50 minutes ([document 2](../02-compute-and-cost.md)).
 - Stage 1 in float32 took approximately 3 times as long as stage 1 in bf16. It needed approximately 0.95 seconds for each sequence, against approximately 0.32 ([gradient clipping](gradient-clipping.md), finding 5).
@@ -133,12 +133,12 @@ scripts/compare_stages.sh 2>&1 | tee eval-stage2-config1.log
 
 | Measure | Run 2 (LoLCATs stage 1, fd128, then the LoLCATs stage 2) | Config 1, after stage 1 | Config 1, after stage 2 (this experiment) | Paper, Lizard 1B |
 |---|---|---|---|---|
-| MMLU subset | 24.9 ± 2.6 | 26.7 ± 2.6 | Not measured yet | – |
-| Share of "A" answers | 98.6% | 51.2% | Not measured yet | – |
-| MMLU, all questions | 23.3 | Not measured | Not measured yet | 29.8 |
-| PIQA | 67.95 ± 1.09 | 57.3 ± 1.2 | Not measured yet | 74.8 |
-| ARC-Easy | 54.8 ± 1.0 | 36.5 ± 1.0 | Not measured yet | 65.6 |
-| Final stage 2 validation loss, and its step | 2.252 at step 1,100 | – | Not measured yet | – |
+| MMLU subset | 24.9 ± 2.6 | 26.7 ± 2.6 | 23.5 ± 2.5 | – |
+| Share of "A" answers | 98.6% | 51.2% | 77.5% | – |
+| MMLU, all questions | 23.3 | Not measured | Not measured | 29.8 |
+| PIQA | 67.95 ± 1.09 | 57.3 ± 1.2 | 67.7 ± 1.1 | 74.8 |
+| ARC-Easy | 54.8 ± 1.0 | 36.5 ± 1.0 | 54.9 ± 1.0 | 65.6 |
+| Final stage 2 validation loss, and its step | 2.252 at step 1,100 | – | 1.9158 at step 1,100 | – |
 
 The teacher gets 33.7 on the MMLU subset in this harness, and 74.1 on PIQA and 65.4 on ARC-Easy in the paper.
 
@@ -172,4 +172,114 @@ These checks ran on CPU, in a copy of the repository with a tiny Llama (3 layers
 
 ## Results
 
-Not run yet.
+### Run 1: stage 2 on config 1 (2026-10-02)
+
+- **Training:** `make hf-job-finetune` with the command in "How to run". The progress bar showed approximately 1.25 seconds for each sequence. Thus one epoch needs 1 hour 38 minutes, and 2 epochs need approximately 3 hours 17 minutes. These notes do not record the job ID or the GPU flavor.
+- **Evaluation:** stage 2 only, on `student06`, with `MODELS=stage2`, `TASKS="piqa arc_easy mmlu_subset"` and `FT_CKPT` as in "Evaluation on the A10". These notes do not record the run directory.
+- **Comparison values:** the stage 1 values come from the second-round evaluation (`results/stages/20261002-102425`). The Run 2 values come from [document 7](../07-results.md) and the [stage difference](stage-difference.md) experiment. The teacher did not run. Thus the summary has no paired statistics, and the z values below use unpaired SEs.
+
+#### Checkpoint
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Bytes per parameter | Stored step | Stored loss |
+|---|---|---|---|---|---|---|---|
+| Stage 2 (`..._paper_noclip_1b-...-se=0-re=0_ft.pt`) | `c5aa09d30e9f9165f8fe9da3b9519afe32c8862c50130c5d8f1b1557041ff5fe` | 4,780,946 B | 1,179,648 | float32 (96 tensors) | 4.05 | **1100** | `eval/loss` = **1.9158** |
+
+- **The load is complete**. In all three evaluations, the files contain the 80 Lizard parameters of stage 1 and the 96 LoRA tensors of stage 2. All of them hold their values after the load.
+- **The LoRA weights are float32**. The 96 tensors are 16 layers × 3 projections (q, k, v) × 2 matrices. In bf16, the file would have approximately 2 bytes for each parameter. Thus the training used the float32 change.
+- **The best checkpoint comes from step 1,100**, the last evaluation of the run.
+
+#### Validation loss
+
+| Run | First evaluation (step 100) | Best and last evaluation (step 1,100) | Perplexity at step 1,100 |
+|---|---|---|---|
+| Run 2 | – | 2.252 | 9.5 |
+| This experiment (11 evaluations) | 3.5081 | **1.9158** | 6.8 |
+
+The validation loss is 14.9% lower than in Run 2. Both runs use the same validation data and the same loss. The loss still decreased at the last evaluation.
+
+#### Scores
+
+| Task | Accuracy | Normalized accuracy | n | Run 2 | Config 1, after stage 1 |
+|---|---|---|---|---|---|
+| MMLU subset (5-shot, 5 questions for each subject) | **23.5 ± 2.5** (67 right) | – | 285 | 24.9 ± 2.6 | 26.7 ± 2.6 (76 right) |
+| PIQA (0-shot) | **67.7 ± 1.1** | 67.2 ± 1.1 | 1,838 | 67.95 ± 1.09 (normalized 66.59) | 57.3 ± 1.2 (normalized 56.6) |
+| ARC-Easy (0-shot) | **54.9 ± 1.0** | 49.5 ± 1.0 | 2,376 | 54.8 ± 1.0 (normalized 50.08) | 36.5 ± 1.0 (normalized 36.4) |
+
+| Difference of this experiment | MMLU subset | PIQA | ARC-Easy |
+|---|---|---|---|
+| Against Run 2 | −1.4 points, z ≈ −0.4 | −0.25 points, z ≈ −0.2 | +0.1 points, z ≈ 0.1 |
+| Against config 1 after stage 1 (the effect of stage 2) | −3.2 points (9 questions), z ≈ −0.9 | +10.4 points, z ≈ 6.4 | +18.4 points, z ≈ 13.0 |
+| Against the paper (Lizard 1B) | – | −7.1 points | −10.7 points |
+
+#### Answer letters on the MMLU subset
+
+| Model | "A" | "B" | "C" | "D" | Letter mass | Confidence | Entropy |
+|---|---|---|---|---|---|---|---|
+| Config 1, after stage 1 | 51.2% | 3.9% | 3.9% | 41.1% | 0.019 | 0.473 | 1.726 bits |
+| **Config 1, after stage 2** | **77.5%** | 11.2% | 5.3% | 6.0% | **0.366** | 0.574 | 1.491 bits |
+| Run 2, after stage 2 | 98.6% | 1.1% | 0.4% | 0.0% | Not recorded | Not recorded | Not recorded |
+
+The right answers are "A" 24.2%, "B" 24.9%, "C" 25.3% and "D" 25.6%. The accuracy (23.5) is below the accuracy of "always A" (24.2).
+
+#### Gates and Lizard parameters
+
+The gate values come from the same 5-shot prompt of `hendrycksTest-high_school_us_history` (2048 tokens) as in the earlier runs. The last two columns give the values of config 1 after stage 1, from the [second round](second-round.md).
+
+| Layer | γ mean | γ min | γ above 0.999 | Kept after 128 | Kept after 512 | After stage 1: γ above 0.999 | After stage 1: kept after 512 |
+|---|---|---|---|---|---|---|---|
+| 0 | 0.997 | 0.978 | 33.4% | 0.73 | 0.27 | 33.4% | 0.27 |
+| 1 | 0.981 | 0.777 | 87.3% | 0.067 | 4.6e-6 | 90.8% | 3.8e-4 |
+| 2 | 0.998 | 0.808 | 81.2% | 0.84 | 0.44 | 76.3% | 7.6e-4 |
+| 3 | 1.000 | 0.939 | 97.5% | 0.93 | 0.75 | 89.1% | 0.70 |
+| 4 | 1.000 | 0.947 | 100.0% | 0.95 | 0.82 | 94.6% | 0.76 |
+| 5 | 0.999 | 0.936 | 90.2% | 0.90 | 0.64 | 99.9% | 0.97 |
+| 6 | 1.000 | 0.947 | 99.6% | 0.94 | 0.79 | 99.9% | 0.92 |
+| 7 | 0.998 | 0.936 | 41.4% | 0.62 | 0.16 | 11.4% | 0.35 |
+| 8 | 0.999 | 0.924 | 54.6% | 0.71 | 0.28 | 37.0% | 0.43 |
+| 9 | 0.993 | 0.900 | 34.1% | 0.12 | 5.0e-4 | 43.8% | 0.48 |
+| 10 | 0.991 | 0.859 | 34.0% | 0.039 | 4.8e-6 | 84.5% | 0.72 |
+| 11 | 0.996 | 0.886 | 40.2% | 0.15 | 2.7e-3 | 99.9% | 0.93 |
+| 12 | 0.996 | 0.858 | 50.9% | 0.12 | 1.7e-3 | 99.7% | 0.94 |
+| 13 | 0.982 | 0.846 | 35.5% | 1.4e-6 | 1.3e-15 | 97.5% | 0.88 |
+| 14 | 0.993 | 0.752 | 47.6% | 2.1e-3 | 1.7e-6 | 65.1% | 0.66 |
+| 15 | 0.993 | 0.603 | 70.5% | 3.2e-4 | 3.3e-7 | 77.6% | 0.81 |
+
+- **The Lizard parameters stayed frozen**. α (0.472–0.644), the sink logits, ‖W_γ‖ and the feature-map RMS are identical to the values after stage 1 in all 16 layers.
+- **Layer 0 is identical**. The input of the gate in layer 0 is the token embedding, which stage 2 does not change.
+- No layer has γ below 1e-3 for any token.
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. Stage 2 recovers more than in Run 2, and PIQA and ARC-Easy end above Run 2 | PIQA rose by 10.4 points (Run 2: 10.35). PIQA and ARC-Easy end within 0.3 points of Run 2. | No |
+| 2. The final scores stay below the paper | PIQA −7.1 points, ARC-Easy −10.7 points | Yes |
+| 3. If stage 2 again selects "A" for almost every question, the "A" collapse does not depend on the stage 1 recipe | The "A" share rose from 51.2% to 77.5%, not to approximately 98.6%. It is above the 60% limit of "How to compare". | Partly. Stage 2 increases the "A" share in both runs. The level depends on the stage 1 checkpoint. |
+| 4. The stage 2 validation loss is lower than 2.252 | 1.9158 (−14.9%) | Yes |
+| 5. Fewer LoRA parameters have no large effect | The final scores equal those of Run 2 with 1,179,648 instead of 1,703,936 LoRA parameters | Agrees. But the run has other changes, so it does not test this alone. |
+
+#### Findings
+
+**Finding 1: config 1 in both stages has no large effect on the final model**. PIQA and ARC-Easy are within 0.3 points of Run 2. This is the row "within approximately 2 points of Run 2" of "How to compare". Its next step is the limit for each head (section 3 of [gap analysis 2](../12-gap-analysis-2.md)), with X1, C1 and C2.
+
+**Finding 2: stage 2 adds the same PIQA points in both runs**. Both stage 1 models have approximately 57.5 on PIQA (57.6 and 57.3). Both stage 2 models end at approximately 67.8. Between the two runs, these settings changed:
+
+- the stage 1 recipe,
+- the feature dimension (128 and 32),
+- the stage 2 learning rate (5 times higher) and its schedule,
+- the precision (bf16 and float32),
+- LoRA on o.
+
+Together, these changes moved the final PIQA and ARC-Easy scores by 0.3 points or less. This agrees with a limit that does not come from the recipe. This project has one seed for each run, so this is probable, not proved.
+
+**Finding 3: a lower validation loss does not give a higher accuracy**. The stage 2 validation loss is 14.9% lower than in Run 2, but PIQA and ARC-Easy do not change. The validation loss measures the prediction of Alpaca text. The stage 1 runs showed the same pattern ([gradient clipping](gradient-clipping.md)).
+
+**Finding 4: on MMLU, stage 2 increases the letter preference**. The "A" share rose from 51.2% to 77.5%. The accuracy fell from 26.7 to 23.5, but this difference is not clear (z ≈ −0.9, unpaired). The letter mass rose from 0.019 to 0.366. Thus after stage 2, the model puts much more probability on the four answer letters, but it does not select the right letter more often.
+
+**Finding 5: stage 2 shortens the memory of the gated branch in layers 9–15**. W_γ is frozen, but the input of the gate changes, because LoRA changes the outputs of the earlier layers. In layers 9–15, the weight kept after 512 tokens fell from 0.48–0.94 to less than 3e-3. In layer 2, it rose from 7.6e-4 to 0.44. In Run 2, the gates almost did not change in stage 2, because they stayed near 1 ([stage difference](stage-difference.md)). These values come from one prompt.
+
+#### Open items
+
+- **Paired statistics for stage 1 and stage 2**. The stage 1 results in `results/stages/20261002-102425` and the stage 2 results of this run have the same questions. The `paired` function of `scripts/compare_stages.py` can compare them without a new evaluation.
+- **The teacher on PIQA and ARC-Easy in this harness** (X0 of gap analysis 2). The comparison above uses the teacher values of the paper.
+- **Stage 2 with trainable Lizard parameters** (a variant of H5). Finding 5 shows that the frozen gate gets a different input after stage 2. A trainable gate could adapt to this input.
