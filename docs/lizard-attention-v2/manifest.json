@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "claim_id": "LIZARD_V2_IMPLEMENTS_MATH_FORMULA",
+  "repository": {
+    "commit": "36288aba3bf523cb9d66d04499dea10d5b7810c3",
+    "dirty": false
+  },
+  "command": [
+    "/tmp/claude-0/-home-user/bf619438-bc86-5ef8-9489-a32345dd97af/scratchpad/tvenv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_lizard_attention_v2.py",
+    "--junitxml",
+    "docs/lizard-attention-v2/junit.xml"
+  ],
+  "environment": {
+    "software": [
+      {
+        "name": "runner-python",
+        "version": "3.11.15"
+      },
+      {
+        "name": "Python (tvenv)",
+        "version": "3.11.15"
+      },
+      {
+        "name": "torch",
+        "version": "2.0.1+cu117 (CPU)"
+      },
+      {
+        "name": "transformers",
+        "version": "4.43.1"
+      },
+      {
+        "name": "pytest",
+        "version": "9.1.1"
+      }
+    ],
+    "hardware": "Linux-6.18.44-fc-v64-x86_64-with-glibc2.39"
+  },
+  "mathematics": {
+    "assertion_tested": "On tiny random float64 layers, lizard_attention_v2 matches a loop form of docs/math-formula.md for 12 option sets (relative error < 1e-10), its decode path matches its parallel form, its defaults give v1 outputs identically, it is causal, branch_weights reproduce the output, the parameter counts for C1/C2/C4/C6 at Llama-3.2-1B sizes match gap analysis 2, the row-mode window share stays below alpha/(1+alpha) while joint mode exceeds it, and a 2-layer LolcatsLlamaForCausalLM converts and decodes with LizardAttentionCache (relative error < 1e-6).",
+    "coefficient_domain": "IEEE float64 on CPU (model logits cast to float32 in check 8)",
+    "conventions": "Readings of the paper as in the Options table of docs/13-lizard-attention-v2.md; sink term sum_j exp(t_j); window of the last w positions",
+    "inputs": [
+      "LlamaAttention: hidden 32, 4 query heads, 2 key/value heads, head dim 8; feature dim 6; window 4; 11 positions; random Lizard parameters",
+      "Llama-3.2-1B layer sizes for the parameter counts only",
+      "2-layer LolcatsLlamaForCausalLM, window 8, 24 tokens"
+    ],
+    "bounds": {
+      "positions": 11,
+      "window": 4,
+      "heads": 4,
+      "option_sets": 12
+    },
+    "non_claims": [
+      "bfloat16 behavior",
+      "full-size layers or 2048-token sequences",
+      "speed or memory",
+      "that any option improves the model",
+      "that the readings of the paper are the ones the authors used"
+    ]
+  },
+  "randomness": {
+    "used": true,
+    "generator": "torch.manual_seed, CPU generator",
+    "seed": "0-7 (one seed for each check group)"
+  },
+  "run": {
+    "started_at": "2026-10-03T19:21:25.814169+00:00",
+    "runtime_seconds": 3.582703,
+    "exit_status": 0,
+    "status": "completed",
+    "timeout_seconds": 600.0,
+    "max_output_bytes": 1048576,
+    "resource_limits": {
+      "memory_bytes": null,
+      "cpu_seconds": null,
+      "max_cores": null,
+      "max_threads": null
+    },
+    "missing_results": [],
+    "invalid_results": []
+  },
+  "execution_artifacts": [
+    "src/model/linear_attention/lizard_attention_v2.py",
+    "src/model/linear_attention/lizard_attention.py",
+    "src/model/convert_model.py",
+    "tests/test_lizard_attention_v2.py",
+    "tests/conftest.py"
+  ],
+  "input_artifacts": [
+    {
+      "path": "src/model/linear_attention/lizard_attention_v2.py",
+      "sha256": "186c464a295d654241d2bbdc2873ca8602073a9f9a884c53ce8ae372f811a6e8",
+      "sha256_after": "186c464a295d654241d2bbdc2873ca8602073a9f9a884c53ce8ae372f811a6e8"
+    },
+    {
+      "path": "src/model/linear_attention/lizard_attention.py",
+      "sha256": "f815ae35c6255ad2a74d610310203d3ea79326fdcd185fea5fbf51a9adeb93eb",
+      "sha256_after": "f815ae35c6255ad2a74d610310203d3ea79326fdcd185fea5fbf51a9adeb93eb"
+    },
+    {
+      "path": "src/model/convert_model.py",
+      "sha256": "88a48782e03414c97e41e060cb3eb4548ec4e2b889da3171f1ca332c36be9ff0",
+      "sha256_after": "88a48782e03414c97e41e060cb3eb4548ec4e2b889da3171f1ca332c36be9ff0"
+    },
+    {
+      "path": "tests/test_lizard_attention_v2.py",
+      "sha256": "2dd927d0e91367447282f6eab3a1145179ea077e1e11aac6cc1b038dfbccb786",
+      "sha256_after": "2dd927d0e91367447282f6eab3a1145179ea077e1e11aac6cc1b038dfbccb786"
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "7a5e02042a498b06ddee9a2e2d3e398de562fce2983c5234e4f914d4b5fcebd5",
+      "sha256_after": "7a5e02042a498b06ddee9a2e2d3e398de562fce2983c5234e4f914d4b5fcebd5"
+    }
+  ],
+  "output_directory": "docs/lizard-attention-v2",
+  "declared_results": [
+    "docs/lizard-attention-v2/junit.xml"
+  ],
+  "outputs": [
+    {
+      "path": "docs/lizard-attention-v2/stdout.txt",
+      "sha256": "c127c894830a72282b99883651fb0c64292909328f0657ff5f0710f09d395164",
+      "kind": "log"
+    },
+    {
+      "path": "docs/lizard-attention-v2/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "log"
+    },
+    {
+      "path": "docs/lizard-attention-v2/junit.xml",
+      "sha256": "58ee9ef04613bc52d8a8a570da09ba5c5688e17cc5a71be2568cb3679a705364",
+      "kind": "result"
+    }
+  ],
+  "checks": [
+    {
+      "check": "input hashes unchanged",
+      "passed": true
+    },
+    {
+      "check": "process exited successfully within enforced limits",
+      "passed": true
+    },
+    {
+      "check": "declared result files are present and regular",
+      "passed": true
+    }
+  ],
+  "result": "Run completed; mathematical assertion requires interpretation and review.",
+  "residual_risks": [
+    "Command success does not establish the mathematical interpretation.",
+    "Only listed input artifacts are pinned; external dependencies need recorded versions."
+  ]
+}

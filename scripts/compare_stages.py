@@ -41,7 +41,7 @@ TASKS = {
     'piqa': 'PIQA (0-shot)',
     'arc_easy': 'ARC-Easy (0-shot)',
 }
-LIZARD_PARAMS = ('phi_q.weight', 'phi_k.weight', 'W_gamma.weight', 'meta_tokens', 'alpha_blend')
+LIZARD_PARAMS = ('phi_q.weight', 'phi_k.weight', 'W_gamma.weight', 'W_gamma.bias', 'meta_tokens', 'alpha_blend')
 GATE_TASK = os.environ.get('GATE_TASK', 'hendrycksTest-high_school_us_history')  # long reading passages
 GATE_MAX_TOKENS = 2048
 KEPT_AFTER = (128, 256, 512)  # tokens back from the last token of the prompt
@@ -144,7 +144,8 @@ def lizard_stats(model, tokenizer):
             # Weight the gated branch keeps on a token w positions before the last token
             'kept_after': {str(w): gamma[-w:].log().sum().exp().item() if len(gamma) >= w else None
                            for w in KEPT_AFTER},
-            'alpha': attn.alpha_blend.float().item(),
+            'alpha': attn.alpha_blend.float().mean().item(),  # the mean over the heads for lizard_v2 alpha_per_head
+            'alpha_per_head': attn.alpha_blend.float().tolist() if attn.alpha_blend.dim() else None,
             'sink_logits': attn.meta_tokens.float().tolist(),
             'W_gamma_norm': attn.W_gamma.weight.float().norm().item(),
             'phi_q_rms': phi_q.pow(2).mean().sqrt().item(),
