@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "mathbox": {
+      "source": { "source": "github", "repo": "nidrissi/mathbox" }
+    }
+  },
+  "enabledPlugins": {
+    "mathbox@mathbox": true
+  }
+}
