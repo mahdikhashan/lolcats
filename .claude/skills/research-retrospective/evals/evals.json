@@ -1,0 +1,101 @@
+{
+  "skill_name": "research-retrospective",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The status file says Claim C3 is proved, the proof obligations call it conditional, and the log records a counterexample to the old formulation. Review the project and recommend the next route.",
+      "expected_output": "Exposes the authority conflict, reconstructs the strongest safe claim, recommends a bounded next check rather than averaging the summaries, and provides a next prompt for the mathbox:research-attempt plugin skill.",
+      "assertions": [
+        "Does not trust the newest or strongest summary automatically",
+        "Identifies the counterexample and conditional dependency",
+        "States the strongest safe current claim",
+        "Recommends at most three bounded routes",
+        "Names the mathbox:research-attempt plugin skill for the next prompt"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Reconcile this research repository. Its live handoff contains five dated full-verification narratives. The latest is current, and each older run already has an indexed immutable research record and a validated computation manifest. The next-action field says only 'test the next arity'.",
+      "expected_output": "Treats the handoff as current state rather than chronology, retains the latest full verification summary, links older runs through their research records or manifests without rewriting them, and replaces the command-like next action with an unresolved mathematical question and a uniform route or discriminating check.",
+      "assertions": [
+        "Identifies the stacked verification narratives as a context sink",
+        "Keeps only the latest full verification summary in the live handoff",
+        "Preserves and links the immutable research records and validated manifests",
+        "Rephrases the next action as a question with a uniform alternative or named discriminator"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review the project portfolio. Whether Claim C8 is ready depends on the exact hypotheses of one cited theorem, and no durable literature check exists.",
+      "expected_output": "Does not launch an unbounded literature survey; if the source question is necessary to decide the requested review, routes that bounded check through the available literature-check skill and its authorized cache-first workflow, otherwise records it as a next route.",
+      "assertions": [
+        "Recognizes the unresolved external-source dependency",
+        "Uses literature-check if the source fact is required for the retrospective verdict",
+        "Otherwise records a bounded source-check route",
+        "Does not infer the theorem from project summaries"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Review a project whose RESEARCH_LOG.md mixes old long-form entries with new compact links into research/records/. The relevant counterexample is in one linked record; unrelated entries span hundreds of lines.",
+      "expected_output": "Reads the index and only the relevant linked or embedded records, reports the pending migration without rewriting history, and bases the verdict on the counterexample's actual evidence.",
+      "assertions": [
+        "Does not read all historical records indiscriminately",
+        "Supports mixed legacy prose and compact linked entries",
+        "Reports migration as pending rather than performing it",
+        "Does not treat migration as a prerequisite for the retrospective",
+        "Does not rewrite existing records or index entries"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Review a ledger where five differently named failed routes all rely on the same unproved collapse and a proof dependency has been retracted. Do not edit.",
+      "expected_output": "Groups routes by the common failed mechanism, traces dependent claims and selects discriminating alternatives without mutating the project.",
+      "assertions": [
+        "Uses dependency impact rather than titles",
+        "Reports downstream conditional claims",
+        "Preserves the read-only boundary"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Review a project whose history says CURRENT_HANDOFF.md is authoritative, but that file does not exist. STATUS.md predates two manuscript commits and still calls the delivered article unfinished. A remote computation is labelled running based only on last week's launch note.",
+      "expected_output": "Reports the broken authority link, treats the dashboard and remote-run state as stale or unknown pending evidence, and proposes a minimal read-only reconciliation plan without choosing status by timestamp alone.",
+      "assertions": [
+        "Checks that the designated authority path exists",
+        "Compares status provenance with later authoritative changes",
+        "Does not infer a live process from an old launch record",
+        "Does not edit during the read-only review"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Review a project with a 2,000-line live status file. Its first page states the current blocker, later pages retain thirty superseded checkpoints, and a compact ledger check reports hundreds of stale artifacts. Do not edit.",
+      "expected_output": "Reads the current summary and relevant records, reports the stale-artifact count without dumping every issue, checks exact affected evidence before a verdict, and recommends a bounded next route while leaving the project unchanged.",
+      "assertions": [
+        "Does not treat old checkpoint narratives as current authority",
+        "Does not consume the full status and issue dump by default",
+        "Does not hide the presence or count of omitted stale issues",
+        "Maintains the read-only boundary"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Reconcile the dashboard. An old narrative has no indexed record or manifest and its bytes are pinned by current evidence.",
+      "expected_output": "Leaves the narrative intact and reports pending closeout/migration and pin conflict.",
+      "assertions": [
+        "No destructive compaction",
+        "No hash refresh to suppress warning"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Review a project whose history entry point links a phase closeout and a nested route index. Its brief check omits 19 issues.",
+      "expected_output": "Follows relevant links and reports omitted count plus strongest supported statement.",
+      "assertions": [
+        "No blind repetition of proved label",
+        "No hidden issue overflow"
+      ]
+    }
+  ]
+}

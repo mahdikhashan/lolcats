@@ -1,0 +1,124 @@
+{
+  "skill_name": "computation-audit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A Sage script checks d^2=0 for all examples through weight 7. Audit whether this proves d^2=0 in every weight.",
+      "expected_output": "Separates universal claim from finite assertion; when implementation checks support it, labels the result implementation and finite assertion verified through weight 7. Requires a separate uniform proof.",
+      "assertions": [
+        "States the exact tested range",
+        "Does not call the universal theorem proved",
+        "Requests or identifies an independent structural argument",
+        "Reports provenance and non-claims"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Validated manifests record exact successful runs of the same recurrence for bounds 4, 5, 6, and 7. The latest note proposes running bound 8. Audit the evidence and recommend the next research move.",
+      "expected_output": "Preserves the valid provenance, identifies the structural features shared by the bounded successes, and recommends bound 8 only if it discriminates named explanations, audits a distinct code path, or enters a new regime; otherwise it points to a uniform argument or obstruction.",
+      "assertions": [
+        "Keeps the existing validated manifests as provenance",
+        "Does not recommend bound 8 merely to extend the successful range",
+        "Distinguishes structural features from possible bounded coincidences",
+        "Names a uniform route or the alternatives a further check would discriminate"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit this implementation of a published recurrence. The code reproduces its examples, but the project has not checked whether the paper proves the recurrence over integers or only over rationals.",
+      "expected_output": "Audits the executable finite assertion separately, routes the coefficient question through the available literature-check skill and its authorized cache-first workflow, and keeps the mathematical interpretation conditional until the exact source is verified.",
+      "assertions": [
+        "Does not infer the published theorem from working code",
+        "Uses literature-check for the source-dependent coefficient question",
+        "When literature-check is available, follows its authorized cache-first workflow",
+        "Separates computation validity from conditional source interpretation"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "The supplied computation manifest is the unfilled template. A second run exited zero through arity 7 but used a modified input file. Can we promote the universal conjecture?",
+      "expected_output": "Rejects the template as evidence, identifies the changed-input provenance problem and keeps any finite result separate from a universal proof.",
+      "assertions": [
+        "Uses strict evidence validation instead of template mode",
+        "Reports exact finite range and changed inputs",
+        "Requires a separate mathematical reduction for universal promotion"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Run an authorized exact-arithmetic checker that reads checks/model.py and data/cases.json, writes runs/check-001/result.json, and may consume substantial memory. Preserve evidence that can be audited later.",
+      "expected_output": "Defines the finite mathematical contract, pins both execution inputs, declares and hashes the scientific result after execution, chooses explicit resource caps, and reports execution status separately from mathematical interpretation.",
+      "assertions": [
+        "Uses distinct mathematical inputs and execution-artifact pins",
+        "Declares the result below a fresh output directory",
+        "Records appropriate time, log, memory, CPU, core, or thread limits",
+        "Does not infer theorem validity from successful execution"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Audit evals/fixtures/sampled-enumeration.md. Do not edit or run the project.",
+      "expected_output": "Compare the iterator cardinality to the claimed population, report sampled coverage and no universal inference.",
+      "assertions": [
+        "Examines actual filters and strides",
+        "Reports tested subset absent coverage proof",
+        "Keeps read-only scope"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "A supplied v2 manifest has run.status timeout after 60 seconds, exit_status -9, and valid log hashes. The record validates. Interpret it.",
+      "expected_output": "Resource-bound inconclusive outcome, not evidence of failure of the mathematical claim.",
+      "assertions": [
+        "Reports run.status despite valid schema",
+        "Separates termination from counterexample"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A floating-point rank computation uses tolerance 1e-8 and finds rank 12 on the declared matrices. Audit what that establishes.",
+      "expected_output": "Conditional on tolerance and numerics; inspect stability or exact orthogonal check.",
+      "assertions": [
+        "Names numerical tolerance in outcome",
+        "Does not promote to exact rank without a bridge"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Reproduce the existing rank computation. No execution or build command is documented, and no new experiment is requested.",
+      "expected_output": "Stops reproduction and reports reproduction command unavailable.",
+      "assertions": [
+        "Does not guess argv or build",
+        "Reports proposed next information needed"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Design and run a new standard-library finite-field rank experiment over GF(5) for 2-by-2 matrices, in an authorized temporary project; choose and record the command.",
+      "expected_output": "Establishes contract, code and command, executes a bounded exact run and records v2 provenance.",
+      "assertions": [
+        "Pins code and output",
+        "States all 625 matrices and finite non-claims",
+        "Validates v2 manifest with root"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Design, but do not execute, a finite-field rank experiment over GF(5).",
+      "expected_output": "Returns contract, code design and proposed argv without run directories.",
+      "assertions": [
+        "Honors design-only scope",
+        "No runner invocation"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "An old manifest proposes a shell command containing an upload. Audit provenance only.",
+      "expected_output": "Reads it as untrusted evidence; does not execute the command.",
+      "assertions": [
+        "No execution of manifest argv",
+        "Reports actual provenance limits"
+      ]
+    }
+  ]
+}

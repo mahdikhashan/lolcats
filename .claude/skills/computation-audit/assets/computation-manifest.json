@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "claim_id": "",
+  "repository": {
+    "commit": "",
+    "dirty": true
+  },
+  "command": [],
+  "environment": {
+    "software": [
+      {
+        "name": "",
+        "version": ""
+      }
+    ],
+    "hardware": ""
+  },
+  "mathematics": {
+    "assertion_tested": "",
+    "coefficient_domain": "",
+    "conventions": "",
+    "inputs": [],
+    "bounds": {},
+    "non_claims": []
+  },
+  "randomness": {
+    "used": false,
+    "generator": "",
+    "seed": null
+  },
+  "run": {
+    "started_at": "",
+    "runtime_seconds": null,
+    "exit_status": null,
+    "status": "",
+    "resource_limits": {
+      "memory_bytes": null,
+      "cpu_seconds": null,
+      "max_cores": null,
+      "max_threads": null
+    }
+  },
+  "outputs": [
+    {
+      "path": "",
+      "sha256": "",
+      "kind": "result"
+    }
+  ],
+  "checks": [],
+  "result": "",
+  "residual_risks": [],
+  "input_artifacts": [
+    {
+      "path": "",
+      "sha256": "",
+      "sha256_after": ""
+    }
+  ],
+  "declared_results": []
+}

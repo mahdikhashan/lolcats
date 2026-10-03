@@ -1,0 +1,58 @@
+[
+  {
+    "query": "Proofread this paper.",
+    "should_trigger": true
+  },
+  {
+    "query": "Referee this entire manuscript.",
+    "should_trigger": false
+  },
+  {
+    "query": "Proofread the new proof in paper.tex conservatively.",
+    "should_trigger": true
+  },
+  {
+    "query": "Check these equations for dropped indices and LaTeX mistakes.",
+    "should_trigger": true
+  },
+  {
+    "query": "Do a final copyedit of the changed theorem hunks.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review this proof as a copyeditor; flag logical concerns instead of fixing them.",
+    "should_trigger": true
+  },
+  {
+    "query": "Prove that every finite subgroup of a field multiplicative group is cyclic.",
+    "should_trigger": false
+  },
+  {
+    "query": "Write a new LaTeX proof of the snake lemma from scratch.",
+    "should_trigger": false
+  },
+  {
+    "query": "Convert these handwritten notes into a polished chapter.",
+    "should_trigger": false
+  },
+  {
+    "query": "Shorten this proof by replacing the spectral-sequence argument.",
+    "should_trigger": false
+  },
+  {
+    "query": "Search the literature to see whether this theorem is known.",
+    "should_trigger": false
+  },
+  {
+    "query": "Confirm the cited paper proves this over integers.",
+    "should_trigger": false
+  },
+  {
+    "query": "Audit the correctness of the main theorem and find gaps.",
+    "should_trigger": false
+  },
+  {
+    "query": "Integrate the validated Lemma 4.1 into paper.tex and update its cross-references.",
+    "should_trigger": false
+  }
+]

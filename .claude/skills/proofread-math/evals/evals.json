@@ -1,0 +1,64 @@
+{
+  "skill_name": "proofread-math",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Proofread this pasted LaTeX. Correct the prose but do not guess the sign: Let $f\\colon X\\to Y$ be a continuous maps. We have $d(f(x),f(y))=-d(x,y)$.",
+      "expected_output": "Corrects the grammatical error, preserves the sign, and reports the sign as unresolved.",
+      "assertions": [
+        "Corrects 'a continuous maps'",
+        "Does not silently change the minus sign",
+        "Reports the possible sign issue outside the corrected source"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review only: For every $i\\in I$, choose $x_i\\in X_i$. Then $x_j$ is nonzero. No $j$ is defined.",
+      "expected_output": "Reports the unbound symbol without editing or asserting that i is certainly intended.",
+      "assertions": [
+        "Produces findings rather than rewritten source",
+        "Identifies the unbound j",
+        "Does not guess a correction with certainty"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Self-review only the theorem hunk you just changed and adjacent definitions. No build command is documented.",
+      "expected_output": "Limits coverage and reports validation not run rather than inventing a command.",
+      "assertions": [
+        "Limits coverage to changed hunk and necessary context",
+        "Does not rewrite unrelated sections",
+        "Reports validation not run with reason"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Proofread this theorem and also confirm that the cited paper proves it over integers.",
+      "expected_output": "Keeps syntax and prose proofreading separate, treats the substantive source claim as outside proofreading, and routes that claim through the available literature-check skill rather than attempting source verification under the proofreading contract.",
+      "assertions": [
+        "Proofreads only within the conservative editing boundary",
+        "Distinguishes citation syntax from mathematical source verification",
+        "Routes the integral source question to literature-check",
+        "Does not silently alter the theorem based on an unchecked citation"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Proofread this paper: Every positive integer is even. Proof: this is clear. No corrections were requested.",
+      "expected_output": "Review-only; flags the substantive issue without mathematical repair.",
+      "assertions": [
+        "No file edits by default",
+        "Proof gap is not proofreading typo"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Correct the typo in this local LaTeX sentence: Let f be the identity on X. Thus $f(x)=y$ for every $x\\in X$. This sentence has no other variables.",
+      "expected_output": "Changes y to x only as uniquely forced local token typo and lists it.",
+      "assertions": [
+        "Reports exact mathematical-token change",
+        "Does not change unrelated reasoning"
+      ]
+    }
+  ]
+}

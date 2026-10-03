@@ -1,0 +1,173 @@
+{
+  "skill_name": "research-init",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Refresh this research repository. The mathbox plugin already provides proof-audit and research-attempt, but the repository also has local copies under .agents/skills and two more under a root skills directory.",
+      "expected_output": "Recognizes proof-audit and research-attempt as mathbox plugin skills, proposes removal or archival of duplicate/misplaced local copies, creates no replacements, and moves local mathematical content into project files.",
+      "assertions": [
+        "Defaults to no project skills",
+        "Flags root skills as misplaced",
+        "Does not regenerate mathbox plugin skills",
+        "Presents a proposal before writing"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Set up this mathematical research repository so agents can retain public papers locally without committing them and can avoid indexing copyrighted cache contents during repository inspection.",
+      "expected_output": "Proposes the standard .research-cache/literature convention, a tracked root ignore rule, an explicit retention policy, and leaves cached source content outside repository inspection and tracked research records.",
+      "assertions": [
+        "Proposes /.research-cache/ in the project Git ignore rules",
+        "Treats the cache's own internal ignore rule as a fallback, not as the project rule",
+        "Records only metadata and hashes in the tracked literature record",
+        "Does not inspect or commit cached PDF or extracted-text content",
+        "Makes source retention conditional on project authorization"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Initialize this repository and determine whether every theorem cited in its literature record has the hypotheses needed by the proofs.",
+      "expected_output": "Inventories and configures the repository first, then executes the explicitly requested substantive theorem checks as a subsequent literature-check work package within the same assignment.",
+      "assertions": [
+        "Keeps repository initialization separate from source verification",
+        "Does not read cached source content merely to initialize the repository",
+        "Routes substantive theorem questions to literature-check",
+        "Completes authorized source checks or reports actual source-access limits rather than merely deferring them"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Refresh this Git-backed research repository. RESEARCH_LOG.md contains several long-form route entries, one has no date, and a preamble does not belong to any entry. Convert it to the current research-record architecture.",
+      "expected_output": "Makes a concrete lossless migration mapping, classifies relevance against the repository mission, preserves unmatched or uncertain context in quarantine, and requires review of the mapping before replacing or indexing the legacy log.",
+      "assertions": [
+        "Triggers on route-level prose rather than a size threshold",
+        "Shows source spans, destinations, relevance classifications and carried evidence labels for review before indexing",
+        "Uses the earliest supporting Git date for the undated entry and labels that date as inferred",
+        "Preserves unmatched, foreign and ambiguous text in quarantine rather than live project history",
+        "Verifies lossless representation before replacing RESEARCH_LOG.md",
+        "Does not strengthen legacy evidence labels or statuses"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Retrofit this project now, preserving historical records. Several confident proved labels have no accessible proof artifacts. Add executable claim tracking if useful.",
+      "expected_output": "Applies existing edit authorization, maps exact claims conservatively and does not import unsupported prose as proof.",
+      "assertions": [
+        "Does not ask again for routine authorized changes",
+        "Retains historical content and claim IDs",
+        "Separates proof artifacts from status labels"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Inspect and propose a retrofit for this synthetic-style repository. It uses PLAN.md, STATUS.md, two dated HANDOFF files, THEOREMS.md, FACT_INVENTORY.md, docs/path-migrations.json, and computation manifests under checks/. AGENTS.md exists but CLAUDE.md does not; RESEARCH_LOG.md mixes linked index lines with full route prose. A root skills/ directory contains a local proof-audit/SKILL.md.",
+      "expected_output": "Recognizes semantic role aliases rather than requiring canonical names, inventories computation manifests and path maps separately, accepts AGENTS.md without a CLAUDE.md bridge and reports multiple handoff candidates, classifies the log as mixed without choosing authority from filenames alone, and leaves source-derived inventory assertions pending verification.",
+      "assertions": [
+        "Recognizes plan, status, theorem/fact inventory and handoff variants",
+        "Inventories computation manifests separately from build manifests",
+        "Does not require a CLAUDE.md bridge when AGENTS.md is present",
+        "Flags multiple handoff candidates for authority review",
+        "Classifies the research log structurally as mixed",
+        "Schedules exact source verification before source-derived inventory entries become foundations",
+        "Reports misplaced root skills and the log classification from the default brief inspection"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Retrofit the research history. The legacy log contains one route about the stated mission, one record clearly copied from a different project, and one whose relevance cannot be determined from the text.",
+      "expected_output": "Prepares a lossless reviewed mapping, proposes normal records only for mission-relevant routes, quarantines foreign and ambiguous material with provenance, and does not index it as current project history before review.",
+      "assertions": [
+        "Classifies relevance against the explicit repository mission",
+        "Does not infer relevance from topic words or filenames",
+        "Quarantines foreign and ambiguous records without declaring them mathematically false",
+        "Requires mapping review before replacing the live index"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Initialize this repository for a journal manuscript. The draft is 24 pages, but I have not told you the venue, language, audience, deadline, page-count rules, or page budget.",
+      "expected_output": "Treats every submission constraint as unresolved and asks a compact material interview covering venue/template/category, language/audience, exact deadline, count convention, and a page budget that includes front matter, bibliography, figures and contingency.",
+      "assertions": [
+        "Does not infer a page limit or venue from the current draft",
+        "Asks for language and intended audience",
+        "Asks for an exact deadline and timezone",
+        "Asks what the page-count convention includes",
+        "Requires explicit budget for front matter, main text, bibliography, figures/tables, appendices/supplement and contingency"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Refresh this research repository's agent architecture. The current status is a long sequence of dated checkpoints, AGENTS.md repeats the current deliverable, and a preserved import directory contains hundreds of links that are broken only in that historical location.",
+      "expected_output": "Produces a reviewed plan for one compact current dashboard, leaves durable history linked and discoverable, moves mutable deliverable facts to the charter/status, and separates current-path inspection findings from historical candidates before proposing edits.",
+      "assertions": [
+        "Uses the brief inspector first and drills into omitted current-path findings",
+        "Does not treat historical import links as automatically live broken references",
+        "Keeps project-specific authorization and mathematical safeguards in root instructions",
+        "Preserves old checkpoint evidence before replacing live-status narratives",
+        "Does not require reading the whole growing status file in every future task"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Plan the migration of this existing research repository to compact instructions and one live status. Its AGENTS.md requires reading a 150 KB status file; dated checkpoints mix current and historical claims; its schema-v1 ledger has pre-existing stale issues and a charter pinned by many active claims. Do not edit yet.",
+      "expected_output": "Produces a read-only section inventory, proposed source-to-destination crosswalk and baseline, marks uninspected ranges, identifies authority conflicts and pin fanout, and stops before editing or refreshing hashes.",
+      "assertions": [
+        "Treats the request as a plan, not authorization to edit",
+        "Uses brief inspector and ledger queries before targeted detail",
+        "Plans complete accounting for substantive old status sections and unique AGENTS rules before replacement",
+        "Does not move mutable facts into the pinned charter merely to match a template",
+        "Distinguishes pre-existing ledger issues from migration regressions",
+        "Captures the complete baseline issue list rather than the eight-issue summary sample",
+        "Does not rewrite schema-v1 events or infer proved from historical prose"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Retrofit this research repository's history now. Its RESEARCH_LOG.md is a large flat index with working relative links, several long-running programs and one route of uncertain provenance. Keep ordinary route records immutable and make routine navigation compact.",
+      "expected_output": "Builds a reviewed route-to-program mapping, preserves the old flat index and links, creates a small designated program/phase entry point with closeouts and route indexes, leaves the uncertain route unpromoted, and verifies link reachability before replacement.",
+      "assertions": [
+        "Does not infer program membership from filenames or dates alone",
+        "Keeps old index text reachable, preferably as a frozen legacy index",
+        "Does not duplicate all route lines in the new top-level entry point",
+        "Does not turn uncertain historical material into a current program result",
+        "Checks links and source-to-destination coverage before replacing the live entry point",
+        "Treats broken links inside current route records as current findings, not archived history"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Migrate a 2023 flat research log into program indexes. A theorem was proved only in a 2025 revision; the 2023 program cutoff is inferred from Git history, and two mission-relevant route entries have no defensible program assignment. Preserve all old links.",
+      "expected_output": "Builds historical closeouts that label the 2023 cutoff as inferred and distinguish the 2025 assessment, preserves the two routes in a linked unclassified inventory, reconciles every old entry to a program, unclassified inventory, or quarantine, and retains the old index and working links.",
+      "assertions": [
+        "Does not turn first Git appearance into a certain mathematical completion date",
+        "Does not backdate the 2025 proof to a 2023 closeout",
+        "Keeps mission-relevant but unassigned routes linked and outside program verdicts",
+        "Uses quarantine only for foreign or mission-ambiguous material",
+        "Accounts for all old entries and verifies links before changing the default entry point"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Set up root agent instructions for a small research repository that will not have a separate charter file. The owner wants agents to follow their current direction.",
+      "expected_output": "States the main question, deliverable, success criterion, fallback, and exclusions in AGENTS.md; lets current user direction set scope and priorities without ranking it above durable proof on mathematical status; and requires fresh adversarial review before a material new claim is promoted.",
+      "assertions": [
+        "Records mission, success, fallback, and exclusions somewhere durable rather than deleting the charter pointer",
+        "Keeps durable proof above chat or user assertion for mathematical status",
+        "Requires fresh adversarial review before promoting a material new claim",
+        "Replaces every template placeholder"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Use research-init to inspect and plan a retrofit, without editing. AGENTS.md declares **Verification:** `python3 scripts/check.py` and **Status:** `STATUS.md`. RESEARCH_LOG.md starts with a ```markdown fenced example containing a ```python line and a fake route link; its true closing fence is followed by a dated route heading, a route field and a link to records/route.md. Do not invent a missing verification file from the command.",
+      "expected_output": "The read-only inspector reports STATUS.md as a declared path, excludes the verification command and fenced example from path/history findings, and retains the real dated route and record link after the closing fence for migration planning.",
+      "assertions": [
+        "Does not list a shell command under declared file paths",
+        "Does not treat a language-bearing fence inside an open code block as a closing fence",
+        "Classifies the real linked and dated route content as mixed history",
+        "Keeps line locators for prose references after the example",
+        "Does not edit during a plan-only request"
+      ]
+    }
+  ]
+}

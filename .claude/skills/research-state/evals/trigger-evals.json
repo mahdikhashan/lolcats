@@ -1,0 +1,78 @@
+[
+  {
+    "query": "Check the .mathbox ledger and tell me which proofs are stale.",
+    "should_trigger": true
+  },
+  {
+    "query": "Set up executable evidence and dependency tracking for this research project.",
+    "should_trigger": true
+  },
+  {
+    "query": "Reconcile these delayed parallel route runs against their shared base revision in the .mathbox ledger.",
+    "should_trigger": true
+  },
+  {
+    "query": "Generate a goal-scoped ledger handoff with active review conditions and route prerequisites.",
+    "should_trigger": true
+  },
+  {
+    "query": "Batch these claim and evidence proposals into the .mathbox journal, then show which claims pin this manuscript file.",
+    "should_trigger": true
+  },
+  {
+    "query": "Explain the definition of a chain complex.",
+    "should_trigger": false
+  },
+  {
+    "query": "Audit this proof without creating project files.",
+    "should_trigger": false
+  },
+  {
+    "query": "Prepare a weekly research handoff from the status file, claims and log.",
+    "should_trigger": false
+  },
+  {
+    "query": "Pursue this conjecture through several approaches until one works.",
+    "should_trigger": false
+  },
+  {
+    "query": "Reconcile this inconclusive run in .mathbox and preserve its untried continuation for a later run.",
+    "should_trigger": true
+  },
+  {
+    "query": "Correct a premature route closure in the .mathbox ledger without changing the mathematical premises.",
+    "should_trigger": true
+  },
+  {
+    "query": "I can inspect the .mathbox ledger but cannot execute scripts or write here. Produce a deferred packet for the new evidence so I can ingest it locally.",
+    "should_trigger": true
+  },
+  {
+    "query": "This project has a .mathbox ledger; proofread the edited paragraph in Section 2.",
+    "should_trigger": false
+  },
+  {
+    "query": "This project uses .mathbox. Review the whole project and recommend the next three routes.",
+    "should_trigger": false
+  },
+  {
+    "query": "Set up AGENTS.md, a charter and a live status file for this research repository.",
+    "should_trigger": false
+  },
+  {
+    "query": "Attack lemma L in this .mathbox project.",
+    "should_trigger": false
+  },
+  {
+    "query": "Close out program P and compact its status.",
+    "should_trigger": false
+  },
+  {
+    "query": "Migrate our flat research log into program indexes.",
+    "should_trigger": false
+  },
+  {
+    "query": "Validate this computation manifest.",
+    "should_trigger": false
+  }
+]

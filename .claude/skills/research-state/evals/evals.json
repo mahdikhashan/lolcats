@@ -1,0 +1,213 @@
+{
+  "skill_name": "research-state",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Record a proof of A and a proof of B depending on A. Revise A’s coefficient regime, then generate a handoff without modifying the proof files.",
+      "expected_output": "Preserves history, makes both affected proof snapshots stale, reports dependent impact and requires revalidation.",
+      "assertions": [
+        "Uses actual helper commands",
+        "Does not refresh hashes to hide staleness",
+        "Does not treat clean bookkeeping as proof verification",
+        "Uses neutral recorded-evidence labels rather than automatically declaring either claim proved",
+        "Read-only reports do not initialize or rewrite state"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "In an authorized temporary ledger, record a counterexample with a conditional review because connectedness of its witness remains unverified. Generate a status report, then remove the review artifact and report again. Explain what is needed to resolve the challenge.",
+      "expected_output": "The claim remains conditional in both reports; the missing report is also flagged as stale. Explicit review retraction or replacement evidence is required to resolve the challenge.",
+      "assertions": [
+        "Uses actual helper commands and durable evidence and review artifacts",
+        "Does not present the unresolved witness as an unconditional refutation",
+        "Does not silently rehabilitate evidence when a conditional report disappears"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "In an authorized temporary ledger, register A and a goal B depending on A. Close a route for A with a failed obstruction test and a next question, and also close an unrelated route. Produce JSON and Markdown handoffs for B and identify the event needed to reopen the failed mechanism with new mathematical input.",
+      "expected_output": "Both handoffs retain A's closed mechanism, failed outcome, obstruction, next question and result event ID, exclude unrelated route history, and keep next candidates limited to open routes.",
+      "assertions": [
+        "Runs the helper and inspects both handoff formats",
+        "Preserves goal dependency route history and the result event ID needed for reopens",
+        "Does not reopen an exhausted mechanism without changed mathematical input",
+        "Read-only reports preserve ledger events"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "In an authorized temporary ledger, bind claim A to a statement artifact and locator, record proof evidence for A and B depending on A, then change only the bound statement file. Check status and attempt to review the old evidence.",
+      "expected_output": "The helper pins the statement artifact, marks the relevant evidence and dependent claim stale after the statement changes, and refuses a review of stale evidence.",
+      "assertions": [
+        "Uses a synthetic project and actual helper commands",
+        "Records the statement locator and helper-generated artifact hash",
+        "Reports transitive staleness without silently refreshing evidence",
+        "Does not claim that the locator itself was semantically parsed"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "In an authorized temporary ledger, register a goal, two routes, and a program. Start two parallel runs of one route from the same recorded base. Mark one execution state unknown, record both terminal results at their actual revisions, explicitly reconcile their conflict, then record a third result that arrives after route closure.",
+      "expected_output": "The status preserves the common base and per-run revisions, does not treat unknown as active, closes executions separately from the route, records conflicts explicitly, and gives the delayed result a late disposition through the single writer.",
+      "assertions": [
+        "Uses program, route-run, observation, run-result and route-reconcile events",
+        "Does not infer precedence or correctness from event arrival order",
+        "Does not merge or renumber concurrent journals",
+        "Does not promote a claim merely because a run or route succeeded"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "In an authorized temporary ledger, record bounded computation evidence with a conditional review, plus a parent-owned route that resolves a goal sub-obligation and depends on an auxiliary claim outside the theorem dependency closure. Generate JSON and Markdown handoffs for the sub-obligation.",
+      "expected_output": "The computation remains conditional; both handoffs expose the exact active review and report, discover the parent-owned route through its resolved obligation, and include the auxiliary claim as separately typed route context without changing theorem dependencies.",
+      "assertions": [
+        "Uses actual helper commands and synthetic durable artifacts",
+        "Applies conditional review handling to computation evidence",
+        "Shows review event IDs, outcomes, summaries and report paths",
+        "Uses resolved obligations for route discovery and run scope",
+        "Keeps route prerequisites separate from theorem dependencies"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "In a synthetic initialized ledger with hundreds of claims and many stale artifact issues, check integrity and prepare a goal handoff without flooding the conversation. Then inspect the exact report for one conditional review.",
+      "expected_output": "Uses brief reports for orientation, reports total and omitted issue counts, retrieves the relevant full review before interpreting it, and keeps the check exit status and mathematical evidence boundary intact.",
+      "assertions": [
+        "Does not paste a full project projection merely to find the current blocker",
+        "Reports the complete count of omitted issues rather than implying none exist",
+        "Uses full or JSON detail for the exact active review and its report",
+        "Does not interpret clean ledger bookkeeping as proof certification"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "In an authorized temporary ledger, a checkpoint requires a new claim, proof evidence and a fresh review. Record them efficiently, then report what editing their shared statement file would affect. One proposed dependency in a separate trial batch is invalid.",
+      "expected_output": "Prevalidates and records separate hash-chained events with a batch reference to the new evidence, leaves no events from the invalid trial batch, and reports direct pins and dependent claims without refreshing hashes.",
+      "assertions": [
+        "Uses a dry-run before the actual batch append",
+        "Checks each dry-run receipt's subject and pinned paths before appending",
+        "Keeps claim, evidence and review as distinct events",
+        "Leaves the journal unchanged after invalid batch validation",
+        "Uses pin-impact as a read-only diagnostic",
+        "Does not treat a formatting-only description as mathematical revalidation"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "In an authorized temporary ledger, proof evidence was recorded with its artifact path typed as ./proofs//a.md, and a closed route run pins reports/run.md in its run result. Before editing both files, report what each edit would affect.",
+      "expected_output": "Uses pin-impact with the ordinary spelling proofs/a.md and still finds the evidence pin and dependent claims; reports that editing reports/run.md stales the run result without affecting any claim; changes no ledger event or hash.",
+      "assertions": [
+        "Uses pin-impact as a read-only diagnostic for each file",
+        "Does not conclude that a file is unpinned because its recorded spelling differs",
+        "Reports run-result pins separately from claim and evidence pins",
+        "Does not refresh hashes or treat the edit as mathematically harmless"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "In an authorized temporary ledger, a program has two runs of an open route. One run's result artifact has changed since it was recorded and that result was never reconciled; the other run remains active on a disjoint task. Resume from the brief goal handoff and decide how to handle those runs before a separate parallel check of the same route.",
+      "expected_output": "Reads the brief handoff's execution section, identifies the stale and unreconciled run and the active run by ID, re-examines the stale result before relying on it, checks the active run's scope, and allows a distinct parallel check to have its own run and base without closing the active run.",
+      "assertions": [
+        "Uses the brief handoff before opening full or JSON detail",
+        "Names both runs needing attention and the stale result event",
+        "Does not duplicate the active run's work scope or close it to permit distinct parallel work",
+        "Does not treat a run result as mathematical evidence without checking the artifact"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "In an authorized temporary ledger, register a goal, route R and a program with one run. The run ended inconclusively on a coefficient ansatz; the route record also contains an untried recurrence. Record the result, reconcile it, generate a goal handoff, then resume the recurrence in a later run of R without changing mathematical premises.",
+      "expected_output": "Records an inconclusive run-result and continue reconciliation, keeps R in next and handoff, and starts a later run on R without reopening or changing claim evidence.",
+      "assertions": [
+        "Uses actual helper commands and inspects the resulting candidates and handoff",
+        "Does not use terminal route-result or terminal reconciliation to record an attempt limit",
+        "Preserves the untried recurrence and the first unresolved implication",
+        "Checks that the default handoff shows the continuation's next step and deferral reason under R",
+        "Uses the same route ID and creates no proof or counterexample evidence"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "In an authorized temporary ledger, an earlier route R was closed inconclusive solely because its executor ran out of time. Its record still names an untried recurrence. Correct this premature closure and make that continuation available again; no mathematical premise has changed.",
+      "expected_output": "Preserves the closure event, creates a linked replacement route with reopens, and uses changed_input to explain the closure error and existing untried next action without pretending new mathematics was discovered.",
+      "assertions": [
+        "Uses actual helper commands and retains the old closure bytes",
+        "Preserves the owner, obligations and mechanism in the replacement route",
+        "Reports explicitly that no mathematical premise changed",
+        "Does not evade duplicate detection by renaming the mechanism or add mathematical evidence"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "In an authorized temporary ledger, route R was closed failed because its first obstruction class is nonzero. Reopen R as a premature closure so the next session can try it again; nothing about the obstruction has changed.",
+      "expected_output": "Declines the premature-closure reopening because the failed result records an obstruction, leaves the ledger unchanged, and states that reopening needs a changed_input addressing that obstruction.",
+      "assertions": [
+        "Inspects the recorded result and its obstruction before deciding",
+        "Does not record a replacement route whose changed_input merely relabels the closure",
+        "Does not rename the mechanism or add evidence to evade the reopening contract",
+        "Names the kind of input that would justify reopening"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "You are in a web host with GitHub read access and Mathbox skills, but no filesystem or script execution. The project has an initialized .mathbox ledger. Continue route R, obtain a substantive lemma, and persist what can be persisted. The exact current head event and index tail are visible in the repository, and its .mathbox/config.json opens proofs/ and research/records/ to deferred files and research/index.md to deferred index entries.",
+      "expected_output": "Gives the full mathematical result and a complete mathbox-deferred-v1 JSON packet as the last fenced block, pinned to the inspected head. The packet contains complete new proof and route artifacts, one guarded index entry, and valid ledger proposals without generated fields. It explicitly says the packet has not been applied and does not claim that the ledger or repository was modified.",
+      "assertions": [
+        "Audits the lemma's actual derivation and limits, rather than using the packet as proof of correctness",
+        "Includes complete durable content, not ellipses, pseudo-content, or the conversation transcript",
+        "Uses the exact inspected event ID, event SHA-256, and index tail",
+        "Creates files only under the configured deferred roots and appends only to the configured index",
+        "Uses ordinary batch aliases for proposed intra-packet event references when needed",
+        "Does not invent event IDs, hashes, timestamps, snapshots, or claim that state was recorded",
+        "Places one parseable JSON packet in the final fenced block"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "You are in a web host with GitHub read access and Mathbox skills, but no filesystem or script execution. The project has an initialized .mathbox ledger whose config has no deferred section. Save your new proof of lemma L as notes/lemma.md and record it as evidence for L.",
+      "expected_output": "Recognizes that the local write policy opens no location, so no packet can create notes/lemma.md. Gives the complete note for local handling, explains that opening a deferred location is a local configuration decision, and does not emit evidence for a file that does not exist or claim that anything was recorded.",
+      "assertions": [
+        "Does not emit a packet that creates files where the local policy opens none",
+        "Does not propose evidence that cites a nonexistent artifact",
+        "Treats opening a deferred location as a local decision rather than packet content",
+        "Does not claim that the ledger or repository was modified"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "After real mathematical revalidation of changed proof evidence E, replace it in an authorized temporary ledger.",
+      "expected_output": "Records replacement evidence with supersedes [E], not an erroneous retraction.",
+      "assertions": [
+        "Historical event remains",
+        "Old stale issue removed only by genuine replacement"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Record a finite assertion with a validated version-2 manifest in a temporary ledger, then change its input and inspect impact.",
+      "expected_output": "Pins manifest closure, marks stale finite evidence and reports dependents.",
+      "assertions": [
+        "Matching claim_id and completed status",
+        "No universal promotion"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "What is 2+2? There is no research-state setup authorization.",
+      "expected_output": "Answers the casual question without init.",
+      "assertions": [
+        "No .mathbox creation"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "In an authorized temporary ledger, register a goal and route, start program P at one checkpoint, then execute R at a later checkpoint and preserve a deferred recurrence.",
+      "expected_output": "Uses matching execution/reconciliation base, result without base fields and decision continue.",
+      "assertions": [
+        "Reuses open P",
+        "next and handoff expose continuation",
+        "Separate program start retained"
+      ]
+    }
+  ]
+}
