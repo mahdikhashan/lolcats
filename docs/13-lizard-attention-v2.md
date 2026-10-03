@@ -222,12 +222,25 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 - The sink logits, ‖W_γ‖ and the RMS of the feature maps are almost the same as in config 1.
 - The gated branch keeps more weight after 512 tokens in 14 of the 16 layers. Examples: layer 9 keeps 0.79 (config 1: 0.48), and layer 10 keeps 0.91 (0.72). Layers 7 and 13 keep less (0.17 against 0.35, and 0.87 against 0.88). These values come from one prompt.
 
+**Layer-wise MSE** (`layer_mse.py`, 16 validation batches, 32,768 tokens). The recalculated loss is 3.8092, the same as the stored loss (difference +0.000%). The reference is `docs/experiments/xai-layer-wise-mse/config1.json`.
+
+| Layers | MSE against config 1 | Relative MSE (config 1 → C1) |
+|---|---|---|
+| 0–3 | −0.5% to −3.9% | Layer 2: 1.109 → 1.085, still above 1 |
+| 4–9 | −1.2% to −4.4% | 0.29–0.51 → 0.29–0.49 |
+| 10–14 | −2.6% to −6.0% | 0.33–0.48 → 0.31–0.47 |
+| 15 | −6.6% | 0.623 → 0.582 |
+
+- The MSE decreases in all 16 layers. The largest decreases are in layers 10 and 13–15.
+- Layer 15 still gives 28.9% of the loss (config 1: 29.7%).
+- In layer 2, the Lizard output is still farther from the teacher than an output of 0 (relative MSE above 1).
+
 **Check against the gain rule of the plan** (section "Experiment plan with fewer runs"):
 
 | Part of the rule | Result | Met |
 |---|---|---|
 | Validation loss at least 5% below config 1 | −4.2% | No |
-| Lower MSE of layer 15, head 14 | `layer_mse.py` has not run on this checkpoint yet | Not measured |
+| Lower MSE of layer 15, head 14 | Layer 15: −6.6%. The value of head 14 alone is not read from the result file yet. | Layer 15: yes. Head 14: open. |
 | No accuracy loss of more than approximately 2 points | MMLU −2.8 and ARC-Easy −1.9, neither clear | Borderline |
 
 **Finding 1: one α for each head alone gives no gain by the rule of the plan**. The loss is 4.2% lower. The accuracies do not improve. As in the earlier runs, a lower loss does not give higher accuracies ([stage 2 on config 1](experiments/stage2-config1.md), finding 3).
@@ -249,7 +262,7 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 **Finding 4: on MMLU, the answers are still at the level of guessing**. A model that ignores the questions and uses the same letter shares gets 24.6. C1 gets 23.9.
 
-**Open item**: `layer_mse.py` on this checkpoint (layer 15, head 14).
+**Open item**: the MSE of layer 15, head 14 from `results/layer_mse/v2_alphahead.json` (config 1: 0.234, 11.5% of the loss).
 
 ## Experiment plan with fewer runs
 
