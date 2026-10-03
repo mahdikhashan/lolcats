@@ -155,6 +155,45 @@ make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2
 
 The order of section 5.2 of gap analysis 2 applies: C1 (`alpha_per_head`) first, then C2 (`feature_map_per_head`), then C3 (`gla_norm`) or C6 (`gate_bias_init`). C4 (`gate_per_head`) and C5 (`window_rope`) come last, because they deviate most from the paper.
 
+### Experiment C1: one α for each head
+
+**Config**: `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead`. It is the v2 config with one change: `alpha_per_head: true`. The stage 1 recipe is config 1 of the [second round](experiments/second-round.md). Thus the only difference from config 1 is one α for each of the 32 heads.
+
+**Stage 1 on HF Jobs (H200)**, after the merge of the config and a new Docker image:
+
+```bash
+make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=4h \
+  ARGS="--model_config distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b --no_finetune"
+```
+
+- **Time**: approximately 2.5 hours, as for stage 1 in float32 ([gradient clipping](experiments/gradient-clipping.md), finding 5). The 31 extra α values for each layer add almost no calculation. `HF_TIMEOUT=4h` gives a margin of approximately 1.5 hours.
+- **Checkpoint**:
+
+```
+checkpoints/distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b-m=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt
+```
+
+**Evaluation on the A10**, after `git pull` on `main` (the v2 code must be on the machine):
+
+```bash
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 \
+DISTILL_CONFIG=distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b \
+MODEL_CONFIG=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_alphahead \
+MODELS=stage1 TASKS="mmlu_subset piqa arc_easy" \
+scripts/compare_stages.sh 2>&1 | tee eval-v2-alphahead.log
+```
+
+`summary.md` reports the mean α of each layer. `summary.json` has the 32 values of each layer (`alpha_per_head`).
+
+**CPU check**. `distill_llama.main()` ran stage 1 with this config on a tiny Llama (3 layers, 4 heads) and finished the training:
+
+- The layers were `LolcatsLizardAttentionV2`.
+- `alpha_blend` was trainable, with the shape (4,).
+- The checkpoint got the name above.
+- After 25 steps, the 4 α values of each layer were different (0.9814–0.9819). Thus each head trains its own α.
+
+The final text generation check of `distill_llama.py` then stopped with an error about `token_type_ids`. The tiny test tokenizer gives this field, and the Llama tokenizer does not. The v1 config gave the same error in the same test.
+
 ## Limits
 
 - **XAI scripts**: `attention_weights.py`, `layer_mse.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.

@@ -1,0 +1,40 @@
+name: llama-1b
+# Lizard attention v2 (src/model/linear_attention/lizard_attention_v2.py, docs/13-lizard-attention-v2.md)
+# Copy of distill_llama3_2_1b_lizard_w128_fd32_m4_fp32.yaml with attention_type lolcats_llama_lizard_v2.
+# Experiment C1 of docs/12-gap-analysis-2.md (5.2): copy of distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32.yaml
+# with ONE change, alpha_per_head: true (one window weight alpha for each of the 32 heads, start value 1).
+model:
+  pretrained_model_name_or_path: "meta-llama/Llama-3.2-1B"
+  cache_dir: "/workspace/lolcats/scratch/"   # CHANGE this
+  return_dict: true
+  device_map: auto
+  low_cpu_mem_usage: true
+  torch_dtype: float32                      # float32 model, as in the second round (docs/experiments/float32.md)
+  rope_theta: 500000.0                      # Llama 3.2 uses 500K theta (NOT 10000 like Mistral)
+  attn_implementation: eager                # FlashAttention-2 supports only fp16 and bf16
+
+attention:
+  attention_type: lolcats_llama_lizard_v2
+
+  # As in v1
+  feature_dim: 32                           # dimension of xW; phi(x) has 2 x feature_dim features (D4)
+  window_size: 128
+  num_meta: 4                               # sink logits t_j enter the window denominator as exp(t_j) (D5)
+
+  # v2 options (defaults = v1)
+  gla_norm: row                 # row (v1, Section 3.1 parallel form) | none (C3-i, Section 3.1 recurrent and Section 4) | joint (C3-ii, LoLCATs)
+  alpha_per_head: true          # C1: one alpha for each head (LoLCATs default) -- THE CHANGE of this config
+  alpha_init: 1.0               # start value of alpha
+  train_alpha: true             # false: alpha stays at alpha_init (the paper lists only phi, W_gamma and t as learnable)
+  feature_map_per_head: false   # C2 / D2: one Hedgehog map for each head (LoLCATs default)
+  feature_activation: softmax   # D3: softmax (Table 13, v1) | exp (Section 4)
+  gate_per_head: false          # C4: one gate for each head (the paper uses one gate for all heads)
+  gate_bias_init: null          # C6: a bias in W_gamma with this start value, e.g. 3.0 (gamma ~ 0.95)
+  window_rope: false            # C5: RoPE in the window branch only
+
+  # Which layers stay softmax (none — fully linearize)
+  softmax_attentions: []
+
+  # Train all attention layers
+  train_attention: true
+  remove_base_attn: true                    # Free original softmax weights after distill
