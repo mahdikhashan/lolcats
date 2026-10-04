@@ -1,26 +1,39 @@
 # 14. Liger and GLA
 
-**Status:** Math of two related methods, from their official code. Proof audit of five new claims (P7–P11), with float64 checks. A critical review of the stage 1 runs so far, one proposed code change and a new order of next steps. No new training.
+**Status:** Math of two related methods, from their papers and their official code. Proof audit of five new claims (P7–P11), with float64 checks. A critical review of the stage 1 runs so far, one proposed code change and a new order of next steps. No new training.
 
 - **GLA**: Gated Linear Attention Transformers with Hardware-Efficient Training (Yang, Wang, Shen, Panda, Kim, ICML 2024). Table 4 of the Lizard paper compares the Lizard gate with the gate of this paper.
-- **Liger**: Linearizing Large Language Models to Gated Recurrent Structures (Lan, Sun, Hu, Du, Cheng, arXiv:2503.01496). Liger linearizes a pretrained model with gated linear attention and a sliding window, as Lizard does.
+- **Liger**: Linearizing Large Language Models to Gated Recurrent Structures (Lan, Sun, Hu, Du, Cheng, ICML 2025, arXiv:2503.01496). Liger linearizes a pretrained model with gated linear attention and a sliding window, as Lizard does.
 
 ## Sources
 
 Mathbox skill `literature-check`.
 
-| Source | Version read | Files read | Status |
+| Source | Paper read | Code read |
+|---|---|---|
+| GLA | ICML 2024 version, 23 pages (PDF metadata: Proceedings of ICML 2024, 2024-06-05). Sections 2, 4.1, 4.2 and 4.4, Table 1. | [fla-org/flash-linear-attention](https://github.com/fla-org/flash-linear-attention), commit `3e52d5a`: `fla/layers/gla.py`, `fla/ops/gla/naive.py`, the docstring of `fla/ops/gla/chunk.py` |
+| Liger | ICML 2025 version, 15 pages (PDF metadata: Proceedings of ICML 2025, 2025-05-08). Sections 2–4, Tables 1, 2, 4, 5 and 6. | [OpenSparseLLMs/Linearization](https://github.com/OpenSparseLLMs/Linearization), commit `0b364eb`: `liger/models/liger_gla/modeling_liger_gla.py`, `training/train.py`, `training/trainer.py`, `training/utils.py`, `configs/liger_gla.yaml` |
+
+**Checks performed**:
+
+- **Authentication**: the PDF metadata gives the title, the authors and the ICML proceedings. The README of each code repository cites its paper.
+- **Extraction**: the equations and tables below come from a text extraction of the PDFs (pdfminer). The PDFs came from the user, because the container blocks arxiv.org and openreview.net. They are not in the repository.
+- **Application**: section 3 compares both methods with the v2 code.
+
+**Paper against code**. The paper and the code agree, except in these points:
+
+| Point | Paper | Code | This document |
 |---|---|---|---|
-| Liger, arXiv:2503.01496 | Official code [OpenSparseLLMs/Linearization](https://github.com/OpenSparseLLMs/Linearization), commit `0b364eb` (2025-07-08). Its README links the arXiv paper. | `liger/models/liger_gla/modeling_liger_gla.py`, `training/train.py`, `training/trainer.py`, `training/utils.py`, `configs/liger_gla.yaml` | Code read. Paper text not read. |
-| GLA, arXiv:2312.06635, OpenReview `ia5XvxFUJT` | Code of the GLA authors: [fla-org/flash-linear-attention](https://github.com/fla-org/flash-linear-attention), commit `3e52d5a` (2026-10-04). Its README cites the GLA paper for `fla/layers/gla.py`. | `fla/layers/gla.py`, `fla/ops/gla/naive.py`, `fla/ops/gla/chunk.py` (docstring) | Code read. Paper text not read. |
+| GLA, scale of the query | No scale in Eq. 1 and Eq. 3 | $\mathbf{q}_t / \sqrt{d_k}$ (the default of the kernels) | Code |
+| GLA, normalization of each head | LayerNorm (Section 4.4) | RMSNorm | Both |
+| Liger, gate | Eq. 6: $\mathbf{G}_t = \mathrm{Pooling}(\mathbf{k}_t)$. Table 1: $oldsymbol{lpha}_t = \sigma(\mathrm{Pooling}(\mathbf{k}_t))$. | $\sigma(\mathbf{k}_t)^{1/16}$. The pooling does not change $\mathbf{k}_t$. | Code |
+| Liger, window | Eq. 10 has no RoPE. The paper also writes the softmax attention of the teacher without RoPE (Eq. 1). | RoPE on q and k, as in the teacher | Code |
 
-**Access**. The network policy of this container blocks arxiv.org, openreview.net, proceedings.mlr.press and huggingface.co. GitHub is open. A web search lists Liger in the ICML 2025 proceedings (PMLR volume 267). This document did not open that page.
-
-**Verdict**. The formulas below are the formulas of the official code (checked). The text of the two papers can say more or differ (unverified). To check the papers, put the two PDFs into the session, as with the result files of document 13.
+**Verdict**: verified. The formulas of sections 1 and 2 agree with the papers and the code, except for the four differences above.
 
 ## 1. GLA
 
-Source: `fla/layers/gla.py` and `fla/ops/gla/naive.py`. One head, position $t$, key dimension $d_k$.
+Source: the GLA paper, Section 4.1 (Eq. 3) and Section 4.4, and `fla/layers/gla.py`, `fla/ops/gla/naive.py`. One head, position $t$, key dimension $d_k = d/2$, value dimension $d_v = d$.
 
 **Gate**. One gate value for each key dimension, from a low-rank projection of the input $\mathbf{x}_t$:
 
@@ -28,23 +41,29 @@ Source: `fla/layers/gla.py` and `fla/ops/gla/naive.py`. One head, position $t$, 
 \boldsymbol{\alpha}_t = \sigma\left( \mathbf{x}_t \mathbf{W}_1 \mathbf{W}_2 + \mathbf{b} \right)^{1/\tau}, \qquad \tau = 16, \quad \mathbf{W}_1 \in \mathbb{R}^{d \times 16}, \quad \mathbf{W}_2 \in \mathbb{R}^{16 \times d_k}
 ```
 
-The code calculates $\log \boldsymbol{\alpha}_t = \mathrm{logsigmoid}(\cdot) / 16$. With a logit of 0, the gate is $0.5^{1/16} = 0.958$. Thus the gate starts with a long memory.
+The code calculates $\log \boldsymbol{\alpha}_t = \mathrm{logsigmoid}(\cdot) / 16$. With a logit of 0, the gate is $0.5^{1/16} = 0.958$. The paper calls τ a temperature term "to encourage model to have a slower forgetting rate" (Section 4.4).
 
-**Recurrent form**. No feature map (the default `feature_map=None`) and no denominator:
+**Recurrent form** (Eq. 3). No feature map (the default `feature_map=None`) and no denominator. The paper keeps "a linear kernel ... without a normalizer", because it "works well in practice" (Section 2.1):
 
 ```math
 \mathbf{S}_t = \mathrm{Diag}(\boldsymbol{\alpha}_t)\, \mathbf{S}_{t-1} + \mathbf{k}_t \mathbf{v}_t^\top, \qquad \mathbf{o}_t = \mathbf{S}_t^\top \frac{\mathbf{q}_t}{\sqrt{d_k}}
 ```
 
-**Parallel form** (P11 below). With the cumulative gates $\mathbf{b}_t = \prod_{s=1}^{t} \boldsymbol{\alpha}_s$ as the rows of $\mathbf{B}$:
+**Parallel form** (Section 4.1, and P11 below). With the cumulative gates $\mathbf{b}_t = \prod_{s=1}^{t} \boldsymbol{\alpha}_s$ as the rows of $\mathbf{B}$:
 
 ```math
 \mathbf{O} = \left( \left( (\mathbf{Q} \odot \mathbf{B}) \left( \frac{\mathbf{K}}{\mathbf{B}} \right)^\top \right) \odot \mathbf{M} \right) \mathbf{V}
 ```
 
-The division by $\mathbf{B}$ overflows for long sequences (P3 of document 13). The code (`chunk_gla`) calculates the same output in chunks of the sequence, with the gates in log space.
+The division by $\mathbf{B}$ overflows for long sequences (P3 of document 13). The paper calculates the weights in log space (Eq. 4):
 
-**Output**. The code normalizes each head (RMSNorm), multiplies the result by an output gate, then applies the output projection:
+```math
+P_{ij} = \sum_{k=1}^{d} Q_{ik} K_{jk} \exp\left( \log B_{ik} - \log B_{jk} \right), \qquad i \ge j
+```
+
+A footnote calls this exponent "a data-dependent relative position factor". The chunkwise form (Section 4.2, `chunk_gla` in the code) calculates the same output in chunks of the sequence.
+
+**Output** (Section 4.4). The paper normalizes each head (LayerNorm, RMSNorm in the code), multiplies the result by an output gate, then applies the output projection:
 
 ```math
 \mathbf{y}_t = \left( \mathrm{RMSNorm}(\mathbf{o}_t) \odot \mathrm{swish}(\mathbf{x}_t \mathbf{W}_g) \right) \mathbf{W}_O
@@ -52,9 +71,9 @@ The division by $\mathbf{B}$ overflows for long sequences (P3 of document 13). T
 
 ## 2. Liger
 
-Source: `modeling_liger_gla.py` (class `LigerGatedLinearAttention`). Liger keeps the q, k, v and o projections of the pretrained model. Apart from LoRA, it adds no parameters.
+Source: the Liger paper, Sections 3.1–3.3 (Eq. 6–10), and `modeling_liger_gla.py` (class `LigerGatedLinearAttention`). Liger keeps the q, k, v and o projections of the pretrained model. Apart from LoRA, it adds no parameters.
 
-**Gated branch**. The feature map is a softmax over the head dimension (64), with no weights. The gate comes from the key. The code applies `AdaptiveAvgPool1d` with an output size equal to the input size, thus the pooling does not change the key.
+**Gated branch** (Eq. 6 and 7). The feature map is a softmax over the head dimension (64), with no weights ("Softmax(·) in our implementation", Section 3.2). The gate comes from the key (Section 3.1). The code applies `AdaptiveAvgPool1d` with an output size equal to the input size, thus the pooling does not change the key. The paper writes the gate without the exponent 1/16 (Table 1).
 
 ```math
 \phi(\mathbf{q}_t) = \mathrm{softmax}(\mathbf{q}_t), \qquad \phi(\mathbf{k}_t) = \mathrm{softmax}(\mathbf{k}_t), \qquad \boldsymbol{\alpha}_t = \sigma(\mathbf{k}_t)^{1/16}
@@ -66,13 +85,13 @@ Source: `modeling_liger_gla.py` (class `LigerGatedLinearAttention`). Liger keeps
 
 The code calls `fused_chunk_gla` with `scale=1`. There is no denominator.
 
-**Window branch**. The softmax attention of the teacher, with RoPE, over approximately the last 64 positions (FlashAttention with `sliding_window=64`). No sinks.
+**Window branch** (Eq. 10). The softmax attention of the teacher over the last $w = 64$ positions, "our default implementation". The code uses RoPE and FlashAttention with `sliding_window=64`. No sinks.
 
 ```math
 \mathbf{o}^{swa}_t = \sum_{s=t-w+1}^{t} \frac{\exp\left( \varphi_R(\mathbf{q}_t)^\top \varphi_R(\mathbf{k}_s) / \sqrt{d} \right)}{\sum_{s'=t-w+1}^{t} \exp\left( \varphi_R(\mathbf{q}_t)^\top \varphi_R(\mathbf{k}_{s'}) / \sqrt{d} \right)}\, \mathbf{v}_s, \qquad w = 64
 ```
 
-**Output**. A constant mix with equal weights:
+**Output** (Eq. 9). The paper writes $\mathbf{o}_t = \alpha\, \mathrm{GRM} + \beta\, \mathrm{SWA}$. It states that $\alpha + \beta = 1$ is "particularly critical for linearization", and uses 0.5 for each:
 
 ```math
 \mathbf{o}_t = 0.5\, \mathbf{o}^{swa}_t + 0.5\, \mathbf{o}^{gla}_t
@@ -80,7 +99,34 @@ The code calls `fused_chunk_gla` with `scale=1`. There is no denominator.
 
 The GSA variant of the same code has the comment "0.5 is important".
 
-**Training** (`training/train.py`, `configs/liger_gla.yaml`). One stage, with the next-token cross-entropy loss. LoRA with rank 8 on q, k and v. AdamW, learning rate 1e-3, 2 epochs of alpaca-clean, sequences of 1,024 tokens, gradient clipping at 1.0. Liger has no attention transfer stage. The code uses the MSE trainer only for its LoLCATs baseline.
+**Training** (Eq. 8, Section 4.1, `training/train.py`, `configs/liger_gla.yaml`). One stage, with the next-token cross-entropy loss. LoRA with rank 8 (alpha 8) on q, k and v. AdamW, learning rate 1e-3, 2 epochs of 50,000 alpaca-clean samples (approximately 0.02B tokens), sequences of 1,024 tokens, global batch 8. The code also clips the gradients at 1.0. Liger has no attention transfer stage. The code uses the MSE trainer only for its LoLCATs baseline.
+
+**Results of Liger that matter for this project**:
+
+| Llama-3.2-1B (Liger, Table 4) | Mean of 6 tasks | Mean without MMLU |
+|---|---|---|
+| Llama-3.2-1B (teacher) | 55.1 | 59.9 |
+| GLA-1B | 46.9 | 51.1 |
+| LoLCATs-Llama-3.2-1B | 51.1 | 56.7 |
+| Liger-GLA-Llama-3.2-1B | 52.9 | 59.0 |
+
+Table 4 does not list its tasks. Probably they are the 6 tasks of Table 2: PIQA, ARC-Easy, ARC-Challenge, HellaSwag, WinoGrande and MMLU (5-shot). The table gives no single tasks for 1B.
+
+| Llama-3-8B (Liger, Table 6) | Validation perplexity | Mean of 6 tasks | Mean without MMLU |
+|---|---|---|---|
+| Liger-GLA | 2.96 | 67.6 | 72.4 |
+| Gate from a new projection, not from the key | 3.16 | 63.8 | 68.8 |
+| With a learned feature map | 9.04 | 43.5 | 40.2 |
+| No gate (plain linear attention) | 3.00 | 66.1 | 71.5 |
+| No LoRA | 3.23 | 61.7 | 68.1 |
+| No window branch | 3.75 | 54.2 | 60.2 |
+| No gated branch (window only) | 3.01 | 66.2 | 72.0 |
+
+- **The window carries most of the score**. Without the gated branch, the mean falls by only 1.4 points. Without the window, it falls by 13.4 points.
+- **A learned feature map fails in one-stage training**: perplexity 9.04 against 2.96.
+- **After attention transfer only, MMLU is at the level of guessing also at 7–8B**. Liger, Table 2: LoLCATs after attention transfer gets 23.0 (Mistral-7B) and 23.5 (Llama-3-8B).
+
+The table text of the PDF lists the values by column. This document matched them to the rows by order and checked them against the means in the same tables.
 
 ## 3. Lizard against GLA and Liger
 
@@ -95,7 +141,7 @@ The GSA variant of the same code has the comment "0.5 is important".
 | Training | Stage 1 (MSE to the teacher), then stage 2 (LoRA) | – | Pretraining | One stage (cross-entropy and LoRA) |
 | New parameters (Llama-3.2-1B, fd32) | 98,384 | Up to 2,130,496 (R1b) | – | 0 (LoRA only) |
 
-**Note on Table 4 of the Lizard paper** ([math formulas](math-formula.md), section 8). The row "1D-Pooling" is the gate type of Liger: a gate from the keys, with no new parameters. It got the lowest MMLU score (44.1). The paper writes this gate as $\sigma(\mathrm{Pooling}(\mathbf{k}))$ and the GLA gate as $\sigma(\mathbf{x} W_{\gamma_1} W_{\gamma_2})$, both without the exponent 1/16 of the code above. With the exponent, these gates start near 0.96. Without it, they start near 0.5. The paper does not show which form its ablation used. Thus Table 4 does not settle if the gates of GLA and Liger are worse than the Lizard gate.
+**Note on Table 4 of the Lizard paper** ([math formulas](math-formula.md), section 8). The row "1D-Pooling" is the gate type of Liger: a gate from the keys, with no new parameters. It got the lowest MMLU score (44.1). The Lizard paper writes this gate as $\sigma(\mathrm{Pooling}(\mathbf{k}))$ and the GLA gate as $\sigma(\mathbf{x} W_{\gamma_1} W_{\gamma_2})$, both without the exponent 1/16. The GLA paper and the Liger code have the exponent. The Liger paper does not have it (Table 1). With the exponent, these gates start near 0.96. Without it, they start near 0.5. The Lizard paper does not show which form its ablation used. Thus Table 4 does not settle if the gates of GLA and Liger are worse than the Lizard gate.
 
 ## 4. Proof audit
 
@@ -116,8 +162,8 @@ Mathbox skill `proof-audit`, self-review of `src/model/linear_attention/lizard_a
 **Consequences**:
 
 - **P2 of document 13 stays correct**, but the limit that binds is the total weight (P8a). A larger α gives the window a larger share, and it also makes the output larger than a weighted mean of the values. C1 found this compromise: α = 0.855 for layer 15, head 14 (document 13, finding 5).
-- **P10a agrees with finding 3 of R1b**. A short gate weights recent tokens more, thus it gives position information. The window without RoPE cannot. In R1b, the local heads of layers 0 and 15 probably used the short gate, because their α is almost 0 (document 13, finding 3).
-- **GLA starts with a long memory**. With the exponent 1/16, the gate 0.128 of layer 15 in R1b needs the logit −32.9. Without the exponent, it needs −1.92. Thus GLA makes short gates hard, and Liger leaves the local work to a window with RoPE.
+- **P10a agrees with finding 3 of R1b**. A short gate weights recent tokens more, thus it gives position information. The GLA paper calls the gate term "a data-dependent relative position factor". The window without RoPE cannot. In R1b, the local heads of layers 0 and 15 probably used the short gate, because their α is almost 0 (document 13, finding 3).
+- **GLA starts with a long memory**, on purpose (Section 4.4). With the exponent 1/16, the gate 0.128 of layer 15 in R1b needs the logit −32.9. Without the exponent, it needs −1.92. Thus GLA makes short gates hard, and Liger leaves the local work to a window with RoPE.
 
 **Computation check** (Mathbox skill `computation-audit`). [`liger-gla/check_claims.py`](liger-gla/check_claims.py) runs on tiny random layers in float64 on CPU, with the v2 code of commit `3b13620`. Output: [`liger-gla/check_claims.txt`](liger-gla/check_claims.txt), 11 checks pass. Two checks are controls: the window with RoPE (P10a) and the share of the row form (against P9). The checks cover tiny sizes only. They do not show the effect of a claim on the model quality.
 
@@ -138,10 +184,12 @@ All runs use feature dimension 32, except fd128. Values from documents 7–13 an
 
 1. **The stage 1 loss does not predict the accuracy**. Over the 6 runs with ARC-Easy, the rank correlation (Spearman) between loss and accuracy is +0.31 for ARC-Easy and −0.06 for PIQA. Without R1b, it is −0.20 and −0.36. A positive value means that a lower loss comes with a lower accuracy. With 5–6 runs, none of these values is clear. The run with the lowest loss has the lowest ARC-Easy.
 2. **Stage 1 differences did not reach stage 2 either**. Run 2 (stage 1 loss 3.2549) and stage 2 on config 1 (3.9764) end within 0.3 points: PIQA 67.95 and 67.7, ARC-Easy 54.8 and 54.9. The two runs also have different stage 2 recipes.
-3. **The MMLU subset gives no information after stage 1**. All runs have 22.5–26.7. A model that always selects "A" gets 24.2.
+3. **The MMLU subset gives no information after stage 1**. All runs have 22.5–26.7. A model that always selects "A" gets 24.2. Liger reports the same for LoLCATs at 7–8B after attention transfer (23.0 and 23.5).
 4. **The noise is large**. PIQA has an SE of 1.2 points, ARC-Easy 0.9–1.0. Each run has one seed. Thus the threshold of 5% on the loss in the plan of document 13 has no measured noise floor.
 5. **The loss measures each layer alone**. Each layer gets the input of the teacher. All 16 layers and all positions count the same. Positions 0–127 give 6.25% of the loss, but the prompts of PIQA and ARC-Easy are short. The loss cannot see an error that grows from layer to layer.
-6. **The two related methods are simpler**. Liger has no stage 1, no new parameters, a window with RoPE and a constant mix. GLA has no denominator and a gate that starts near 1. Lizard v1 has a window without RoPE. In C1, its previous-token head (layer 0, head 2) got a small α (document 13, finding 5). R1b added 2 million parameters, and its accuracy fell.
+6. **The two related methods are simpler**. Liger has no stage 1, no new parameters, a window with RoPE and a constant mix. GLA has no denominator and a gate that starts near 1. Lizard v1 has a window without RoPE. In C1, its previous-token head (layer 0, head 2) got a small α (document 13, finding 5). R1b added 2 million parameters, and its accuracy fell. In Liger, a learned feature map made the model much worse (Table 6).
+
+7. **PIQA and ARC-Easy measure mostly the window**. In Liger (Table 6), the model without the gated branch loses only 1.4 points on these short tasks. Thus these tasks cannot show the value of the gated branch for long contexts.
 
 **Conclusion**. The plan of document 13 uses the stage 1 loss as its first test. The data does not support this. Stage 1 runs should be compared by ARC-Easy and PIQA, and the final answer comes from stage 2.
 
@@ -158,6 +206,7 @@ Keep the changes small. One new option, three existing options.
 - The output stays a weighted mean of the values (total weight at most 1), for every α.
 - The share does not depend on the position (P8c), unlike `hybrid` (P9).
 - The start value α = 1 gives the mix 0.5 and 0.5 of Liger (P8d). No new parameters.
+- Liger states that weights with the sum 1 are "particularly critical for linearization" (Section 3.3).
 
 The change in `lizard_attention_v2.py`, approximately 6 lines:
 
@@ -189,7 +238,7 @@ Tests: add `convex` to the option sets of `tests/test_lizard_attention_v2.py` (l
 **Not proposed** (not simple):
 
 - **A gate for each key dimension** (GLA, Liger). The dense form of v2 needs a weight matrix of size positions × positions for each head. With a gate for each dimension, it needs one for each dimension too, or the chunked kernels of GLA.
-- **The feature map and gate of Liger without parameters**. A different method, not a change of Lizard. Table 4 of the Lizard paper does not settle its quality (section 3).
+- **The feature map and gate of Liger without parameters**. A different method, not a change of Lizard. The two papers disagree: in Liger (Table 6), the parameter-free parts work better than learned ones. In Lizard (Table 4), the pooled gate is the worst. The settings differ (one stage against two stages), and the exponent 1/16 is unclear (section 3).
 - **Output normalization and gate of GLA**. New weights, and the output no longer matches the teacher in stage 1. Liger does not use them.
 - **`num_meta: 1`**. Equal to 4 sinks (P7). Keep 4, so that the checkpoints still load.
 
@@ -197,7 +246,7 @@ Tests: add `convex` to the option sets of `tests/test_lizard_attention_v2.py` (l
 
 This order replaces R2–R6 of the plan in document 13 (a proposal, not decided).
 
-1. **Change the decision rule**. Compare stage 1 runs by ARC-Easy and PIQA, paired against config 1. Keep the loss only as a check that training worked. Skip the MMLU subset after stage 1.
+1. **Change the decision rule**. Compare stage 1 runs by ARC-Easy and PIQA, paired against config 1. Keep the loss only as a check that training worked. Skip the MMLU subset after stage 1. These tasks measure mostly the window (finding 7). For the gated branch, also compare the MSE at positions above 128, with the position ranges of `layer_mse.py` (document 13, next step 2).
 2. **Run the cheap check of document 13 first** (A10, no training): R1b and config 1 with the softmax attention of the teacher in layer 15. It tests the most probable cause of the ARC-Easy loss of R1b.
 3. **Add `gla_norm: convex`** with its tests, in one small PR (CPU only).
 4. **Three stage 1 runs on config 1, one change each**, in this order: `window_rope`, `gla_norm: convex`, `gate_per_head`. Each takes approximately 2.5 hours on the H200. Keep a change only if ARC-Easy and PIQA do not fall.
@@ -208,7 +257,7 @@ This order replaces R2–R6 of the plan in document 13 (a proposal, not decided)
 
 ## Limits
 
-- **Paper text not read**. The math above is the math of the official code at the stated commits. The papers can describe other variants or settings.
+- **Text extraction**. The equations and tables come from a text extraction of the PDFs, not from the page images. The values of Liger Tables 2, 4 and 6 depend on the matching of columns to rows (see section 2).
 - **Liger window**. `sliding_window=64` in FlashAttention covers approximately 64 positions. The exact count depends on the FlashAttention version.
 - **Proof audit**: self-review, not an independent audit. The checks use tiny layers and random inputs.
 - **Rank correlations** use 5–6 runs with one seed each. They show only that the data does not support the loss as a selection rule.
