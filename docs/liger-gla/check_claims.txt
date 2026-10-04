@@ -1,0 +1,13 @@
+# python docs/liger-gla/check_claims.py, 2026-10-04, commit 3b13620, torch 2.0.1+cu117, transformers 4.43.1, CPU, float64
+PASS  P7 sinks after 50 Adam steps, max |t_j - t_0|: 0.0e+00 (t_0 = +0.4240)
+PASS  P8a row form: max |total weight - (1 + alpha rho)|: 4.4e-16 (total weight up to 1.700)
+PASS  P8b convex form: same shares as the row form, total weight <= 1: max share difference 1.7e-16, largest total weight 1.0000
+PASS  P8d alpha = 1, rho = 1: relative error of (row form) / 2 against 0.5 GLA + 0.5 window: 7.6e-17
+PASS  P8c row (and convex): share at i = 16, 32, 64, 128, 256: 0.4831, 0.4831, 0.4831, 0.4831, 0.4831
+PASS  P9 hybrid, gamma = 1: share at i = 16, 32, 64, 128, 256: 0.0273, 0.0139, 0.0070, 0.0035, 0.0018; share x i = 0.44, 0.44, 0.45, 0.45, 0.45
+PASS  P10 window without RoPE: weights of positions 10 and 9 are equal, max difference: 0.0e+00
+PASS  P10 window with RoPE: weights of positions 10 and 9 differ, max difference: 0.329
+PASS  P11 GLA parallel form against the recurrent form (gate for each dimension): relative error 2.3e-16
+PASS  P11 scalar gate: (phi(Q) * C)(phi(K) / C)^T * M against branch_weights of gla_norm none: relative error 9.8e-17
+PASS  GLA gate: sigmoid(0)^(1/16), and the logit for gamma = 0.128: 0.9576, -32.89 (without the exponent: -1.92)
+all checks pass
