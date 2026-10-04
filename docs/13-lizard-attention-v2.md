@@ -1,6 +1,11 @@
 # 13. Lizard attention v2
 
-**Status:** Implemented and tested on CPU (37 checks pass, float64). One stage 1 run finished: C1, one α for each head (validation loss 3.8092, −4.2% against config 1, no accuracy gain). See "Experiment C1". R1 (`gla_norm: joint`) stopped at 19% of epoch 0, because `joint` leaves the gated branch almost no weight (P6). R1b uses `gla_norm: hybrid`.
+**Status:** Implemented and tested on CPU (60 checks pass, float64). Two stage 1 runs finished:
+
+- **C1**, one α for each head: validation loss 3.8092 (−4.2% against config 1), no accuracy gain. See "Experiment C1".
+- **R1b**, C1 and C2 with `gla_norm: hybrid`: validation loss 3.0542 (−23.2%), the lowest of all runs. But ARC-Easy fell from 36.5 to 29.9. See "Results of the R1b run".
+
+R1 (`gla_norm: joint`) stopped at 19% of epoch 0, because `joint` leaves the gated branch almost no weight (P6).
 
 v2 is a new attention file: `src/model/linear_attention/lizard_attention_v2.py`. It has the layer of v1 (`lizard_attention.py`) and a model config option for each reading of the paper. It also has an option for each code change of [gap analysis 2](12-gap-analysis-2.md) (C1–C6). The default options give the outputs of v1 exactly. Thus each experiment changes one option, as section 5.2 of gap analysis 2 requires. v1 does not change.
 
@@ -230,7 +235,7 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 - The sink logits, ‖W_γ‖ and the RMS of the feature maps are almost the same as in config 1.
 - The gated branch keeps more weight after 512 tokens in 14 of the 16 layers. Examples: layer 9 keeps 0.79 (config 1: 0.48), and layer 10 keeps 0.91 (0.72). Layers 7 and 13 keep less (0.17 against 0.35, and 0.87 against 0.88). These values come from one prompt.
 
-**Layer-wise MSE** (`layer_mse.py`, 16 validation batches, 32,768 tokens). The recalculated loss is 3.8092, the same as the stored loss (difference +0.000%). The reference is `docs/experiments/xai-layer-wise-mse/config1.json`.
+**Layer-wise MSE** (`layer_mse.py`, 16 validation batches, 32,768 tokens). The recalculated loss is 3.8092, the same as the stored loss (difference +0.000%). The reference is `docs/experiments/xai-layer-wise-mse/config1.json`. The C1 result is [`v2_alphahead.json`](experiments/xai-layer-wise-mse/v2_alphahead.json) in the same folder.
 
 | Layers | MSE against config 1 | Relative MSE (config 1 → C1) |
 |---|---|---|
@@ -289,7 +294,7 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 |---|---|---|---|---|
 | B0 | None: config 1 of the second round | Reference | Exists (validation loss 3.9764) | – |
 | R1 | `alpha_per_head`, `feature_map_per_head`, `gla_norm: joint` | Does the removal of the per-head limit lower the loss? | – | Stopped at 19% of epoch 0: the gated branch had almost no weight (P6). Replaced by R1b. |
-| **R1b** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: hybrid`, `alpha_init: 0.1` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6 |
+| **R1b** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: hybrid`, `alpha_init: 0.1` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6. **Result**: loss −23.2%, but ARC-Easy −6.6 points, thus no gain by the rule. Proposal: R2–R6 wait for the checks of "Results of the R1b run". |
 | R2 | R1b without `gla_norm: hybrid` and `alpha_init: 0.1` | Is the joint denominator (a deviation) necessary? | R1b has a gain | R2 within 2% of R1b: keep R2 |
 | R3 | R1b without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1b has a gain | R3 within 2% of R1b: keep R3 |
 | W | The best config of R1b, R2 and R3, with the fewest deviations | – | – | – |
@@ -350,9 +355,183 @@ make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2
 - **First check during the run**: the `Eval step` lines (`hf jobs logs <job id> | grep -a "Eval step"`). The loss must decrease clearly after the warmup (gradient step 118). R1 stayed near 9–11.
 - **CPU check**. `distill_llama.main()` trained stage 1 with this config on a tiny Llama (3 layers, 4 heads). The layers were `LolcatsLizardAttentionV2`, `phi_q.weight` had the shape (4, 8, 16), and `alpha_blend` had the shape (4,). The validation loss decreased at each evaluation. The final text generation check stopped with the `token_type_ids` error of the tiny test tokenizer, as in "Experiment C1".
 
+#### Results of the R1b run (2026-10-04)
+
+- **Training**: stage 1 on HF Jobs (H200) with the command above. These notes do not record the job ID. The speed was 1.17 micro-batches each second. Thus each epoch took approximately 67 minutes, and the run approximately 2.3 hours.
+- **Evaluation**: `scripts/compare_stages.sh` with `MODELS=stage1`, on `student06`, GPU 0 (A10), on 2026-10-04 at 03:06 UTC. Run directory: `results/stages/20261004-050624-v2-perhead-hybrid`. Code: lolcats `722ec84`, harness `b281b09`, torch 2.5.1, batch size 1. Then `layer_mse.py` on the same machine.
+- **Files in the repository**:
+  - [`lizard-attention-v2/r1b-stage1-eval/`](lizard-attention-v2/r1b-stage1-eval/): the evaluation folder without the `eval.log` files. It has `summary.md`, `summary.json` and `env.txt`. For each task, it has `results.json`, `checkpoints.json`, `lizard.json` and the answer to each question (`*_write_out_info.json`).
+  - [`experiments/xai-layer-wise-mse/`](experiments/xai-layer-wise-mse/): `v2_perhead_hybrid.json` and the plot `v2_perhead_hybrid_vs_config1.png` of R1b, and `v2_alphahead.json` of C1.
+- **Comparison values**: config 1 of the [second round](experiments/second-round.md) and C1. The z values use unpaired SEs.
+
+**Evaluation notes**:
+
+- The first attempt stopped with `FileNotFoundError` for the model config. The checkout was at `8bd2e88` (#48), without #51. The evaluation machine needs #51 or later.
+- `compare_stages.sh` downloads a checkpoint only if the file is not on the machine. If an evaluation downloaded the checkpoint before the end of the job, remove the local file. Then the script downloads the final checkpoint.
+- The messages "Not available: results/....csv" are normal. These runs upload only the checkpoints to the Hub.
+
+**Loss during training** (from the job log):
+
+| Gradient step | Learning rate | Validation loss | `loss_mse` of single micro-batches | `loss` × 8 (mean since the start of the epoch) |
+|---|---|---|---|---|
+| 100 | 8.5e-4 | 9.1031 | 8.3–9.7 | 11.06 |
+| 266 | 9.6e-4 | – | 3.80–4.21 | 8.08 |
+| 500 | – | 3.3623 | – | – |
+| 738 (epoch 1) | 4.3e-4 | – | 3.00–3.44 | 3.23 |
+| 1,100 | – | **3.0542** (best and last evaluation) | – | – |
+
+- At step 100, the loss was near the loss of R1 (`loss_mse` 9.3 at approximately step 112). Between step 100 and step 266, it fell from approximately 9 to approximately 4. R1 did not show this decrease.
+- Up to step 100, the mean of epoch 0 was 11.06, above the values at step 100. Thus the first steps had a loss above 11. A probable reason: with `hybrid`, the gated branch has weight from the start, and its untrained feature maps add error.
+
+**Checkpoint**:
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Stored step | Stored loss |
+|---|---|---|---|---|---|---|
+| R1b, stage 1 | `03833215dfe3100e82422eba041a933efecfa873ca77e951a7edcc8962e476e6` | 8,574,050 B | 2,130,496 | float32 (80 tensors) | 1100 | **3.0542** |
+
+- R1b has 21.7× the parameters of config 1 (98,384). The feature maps for each head have 2,097,152 parameters (16 layers × 2 maps × 32 heads × 32 × 64). The rest is W_γ (32,768), α (512) and the sink logits (64).
+- In all three evaluations, all 80 Lizard tensors loaded with their values.
+- The stored step is 1100, the last evaluation. Thus the evaluation used the final checkpoint.
+
+**Scores**:
+
+| Measure | Config 1 | C1 | R1b | R1b against config 1 |
+|---|---|---|---|---|
+| Stage 1 validation loss | 3.9764 | 3.8092 | **3.0542** | −23.2% |
+| MMLU subset | 26.7 ± 2.6 | 23.9 ± 2.5 | 24.9 ± 2.6 | −1.8 points, z ≈ −0.5 |
+| PIQA | 57.3 ± 1.2 (normalized 56.6) | 57.5 ± 1.2 (normalized 55.0) | 55.9 ± 1.2 (normalized 54.1) | −1.4 points, z ≈ −0.8 |
+| ARC-Easy | 36.5 ± 1.0 (normalized 36.4) | 34.6 ± 1.0 (normalized 34.0) | **29.9 ± 0.9** (normalized 30.3) | **−6.6 points, z ≈ −4.9** |
+| "A" / "B" / "C" / "D" on MMLU | 51.2% / 3.9% / 3.9% / 41.1% | 64.9% / 5.3% / 7.0% / 22.8% | 90.2% / 2.1% / 3.5% / 4.2% | – |
+| Letter mass, confidence, entropy | 0.019, 0.473, 1.726 bits | 0.015, 0.477, 1.720 bits | 0.032, 0.605, 1.460 bits | – |
+
+- The loss is also 6.2% below the LoLCATs recipe with feature dimension 128 (3.2549, [feature dimension](experiments/feature-dimension.md)). R1b uses feature dimension 32.
+- On ARC-Easy, −6.6 points are approximately 157 questions. All earlier fd32 stage 1 runs had 34.1–36.5 on ARC-Easy ([second round](experiments/second-round.md)).
+- On MMLU, the answers stay at the level of guessing. A model that always selects "A" gets 24.2.
+
+**Gates and Lizard parameters** (the same 5-shot prompt of 2,048 tokens as for config 1). The columns of α come from `alpha_per_head` in `summary.json`. `hybrid` uses \|α\|.
+
+| Layer | γ mean | γ min | γ above 0.999 | Kept after 128 | Kept after 512 | Mean \|α\| | Largest α | Heads with α < 0 | Sink logit (all 4 equal) | ‖W_γ‖ | Config 1: kept after 512 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.698 | 0.322 | 0.0% | 2.8e-22 | 1.6e-84 | 0.024 | 0.121 | 2 | −0.12 | 2.00 | 0.27 |
+| 1 | 0.999 | 0.820 | 96.9% | 0.94 | 0.78 | 0.023 | 0.161 | 2 | 0.05 | 3.61 | 3.8e-4 |
+| 2 | 1.000 | 0.975 | 97.8% | 0.99 | 0.95 | 0.012 | 0.065 | 5 | 0.16 | 3.85 | 7.6e-4 |
+| 3 | 1.000 | 1.000 | 100.0% | 1.0 | 1.0 | 0.011 | 0.040 | 1 | 0.08 | 2.76 | 0.70 |
+| 4 | 1.000 | 0.992 | 85.4% | 0.79 | 0.50 | 0.025 | 0.140 | 2 | 0.01 | 2.39 | 0.76 |
+| 5 | 0.997 | 0.957 | 37.4% | 0.26 | 0.028 | 0.025 | 0.097 | 4 | 0.30 | 2.09 | 0.97 |
+| 6 | 1.000 | 0.998 | 98.5% | 0.92 | 0.80 | 0.037 | 0.139 | 0 | 0.09 | 2.12 | 0.92 |
+| 7 | 1.000 | 1.000 | 100.0% | 0.98 | 0.96 | 0.068 | 0.158 | 0 | 0.25 | 2.41 | 0.35 |
+| 8 | 0.999 | 0.992 | 89.4% | 0.85 | 0.60 | 0.027 | 0.065 | 1 | 0.03 | 2.04 | 0.43 |
+| 9 | 0.995 | 0.873 | 3.5% | 0.70 | 0.29 | 0.009 | 0.069 | 0 | 0.35 | 2.51 | 0.48 |
+| 10 | 1.000 | 0.999 | 100.0% | 1.0 | 1.0 | 0.072 | 0.311 | 4 | 0.06 | 2.28 | 0.72 |
+| 11 | 1.000 | 1.000 | 100.0% | 1.0 | 1.0 | 0.045 | 0.140 | 3 | 0.08 | 2.32 | 0.93 |
+| 12 | 1.000 | 1.000 | 100.0% | 1.0 | 1.0 | 0.039 | 0.178 | 5 | 0.10 | 2.61 | 0.94 |
+| 13 | 1.000 | 1.000 | 100.0% | 1.0 | 1.0 | 0.038 | 0.182 | 1 | 0.16 | 2.48 | 0.88 |
+| 14 | 1.000 | 1.000 | 100.0% | 1.0 | 1.0 | 0.067 | 0.162 | 1 | 0.18 | 2.68 | 0.66 |
+| 15 | 0.128 | 0.002 | 0.0% | 9.8e-206 | 0.0 | 0.042 | 0.130 | 1 | 0.62 | 2.58 | 0.81 |
+
+- **The window branch has a small weight**. The mean \|α\| of each layer is 0.009–0.072, below the start value of 0.1. The largest value of one head is 0.311 (layer 10). At most 5 of 32 heads in a layer have α < 0, and all these values are between −0.011 and 0.
+- **The gate keeps all tokens in most layers**. In layers 3, 7 and 10–14, γ is above 0.999 for every token. In these layers, the gated branch adds up all earlier tokens with almost no decay.
+- **Layers 0 and 15 have a short memory**. Layer 0 has a mean γ of 0.698, and layer 15 has 0.128 (config 1: 0.997 and 0.999). In layer 15, the gated branch keeps approximately one token back (largest γ 0.867).
+- The sink logits are −0.12 to 0.62 (config 1: 0.37–0.52). ‖W_γ‖ is 2.00–3.85 (config 1: 1.76–4.38). The feature maps have an RMS of 0.076–0.114 for φq and 0.076–0.106 for φk. Their largest absolute value is 0.47–0.73.
+
+**Layer-wise MSE** (`layer_mse.py`, 16 validation batches, 32,768 tokens). The recalculated loss is 3.0542, the same as the stored loss (difference +0.000%). The 16 batches give 2.496–3.451 (C1: 3.517–4.058). The reference is `docs/experiments/xai-layer-wise-mse/config1.json`. The result is [`v2_perhead_hybrid.json`](experiments/xai-layer-wise-mse/v2_perhead_hybrid.json).
+
+| Layer | MSE × 1000, config 1 | MSE × 1000, R1b | Change | Relative MSE (config 1 → R1b) |
+|---|---|---|---|---|
+| 0 | 0.2662 | 0.1495 | −43.8% | 0.586 → 0.329 |
+| 1 | 0.6563 | 0.315 | −52.0% | 0.475 → 0.228 |
+| 2 | 1.146 | 0.3432 | −70.0% | 1.109 → 0.332 |
+| 3 | 1.966 | 1.166 | −40.7% | 0.680 → 0.403 |
+| 4 | 3.202 | 2.173 | −32.1% | 0.510 → 0.346 |
+| 5 | 4.269 | 3.172 | −25.7% | 0.437 → 0.324 |
+| 6 | 4.469 | 3.201 | −28.4% | 0.401 → 0.287 |
+| 7 | 3.577 | 2.462 | −31.2% | 0.292 → 0.201 |
+| 8 | 4.321 | 3.024 | −30.0% | 0.297 → 0.208 |
+| 9 | 4.339 | 3.077 | −29.1% | 0.381 → 0.270 |
+| 10 | 3.35 | 2.614 | −22.0% | 0.326 → 0.255 |
+| 11 | 2.565 | 1.688 | −34.2% | 0.456 → 0.300 |
+| 12 | 2.735 | 1.8 | −34.2% | 0.483 → 0.318 |
+| 13 | 3.696 | 2.093 | −43.4% | 0.459 → 0.260 |
+| 14 | 4.169 | 2.381 | −42.9% | 0.401 → 0.229 |
+| 15 | 18.9 | 19.21 | +1.7% | 0.623 → 0.633 |
+| Mean (the loss) | 3.9764 | 3.0542 | −23.2% | – |
+
+![Layer-wise MSE of config 1 and R1b, and the change of each layer](experiments/xai-layer-wise-mse/v2_perhead_hybrid_vs_config1.png)
+
+- In layers 0–14, the MSE decreases by 22% (layer 10) to 70% (layer 2).
+- In layer 2, the relative MSE is now 0.332. In config 1 and C1, it was above 1: the Lizard output was farther from the teacher than an output of 0.
+- Layer 15 is the only layer without a decrease (+1.7%). It now gives 39.3% of the loss (config 1: 29.7%).
+
+**Layer 15, for each head**:
+
+| Layer 15 | Config 1 | C1 | R1b |
+|---|---|---|---|
+| Layer MSE | 1.890e-2 | 1.764e-2 | 1.921e-2 (+1.7%) |
+| Head 14 (local) | 0.234 (11.5% of the loss) | 0.216 (11.1%) | **0.052 (3.4%)**, −77.6% |
+| Head 23 (local) | 0.146 (7.2%) | 0.145 (7.4%) | **0.036 (2.3%)**, −75.4% |
+| Mean of the other 30 heads | 0.0075 | 0.0068 | **0.0175**, 2.3× config 1 |
+| Share of layer 15 in the loss | 29.7% | 28.9% | 39.3% |
+
+The layer MSE is the mean of the 32 head values. Thus the mean of the other 30 heads is (32 × layer MSE − head 14 − head 23) / 30.
+
+**Single heads** (from the JSON files and `lizard.json`). In layer 15, four heads have a lower MSE than in config 1, and 28 heads have a higher MSE (×1.21 to ×6.88):
+
+| Layer 15 | MSE, config 1 | MSE, R1b | Change | α (R1b) |
+|---|---|---|---|---|
+| Head 14 | 0.2339 | 0.0525 | −77.6% | 0.0008 |
+| Head 23 | 0.1462 | 0.0359 | −75.4% | 0.0024 |
+| Head 0 | 0.0109 | 0.0081 | −26.0% | 0.0062 |
+| Head 24 | 0.0261 | 0.0202 | −22.7% | 0.0014 |
+| Head 15 (now the largest MSE of the layer) | 0.0225 | 0.0722 | ×3.21 | −0.0038 |
+| Head 27 (the largest increase) | 0.0025 | 0.0171 | ×6.88 | 0.0232 |
+
+- In layer 15, the mean \|α\| is 0.042, and the largest α is 0.130. Heads 14 and 23 have the ranks 30 and 21 of 32 for \|α\|.
+- In layer 0, head 2 attends to the previous token. Its MSE decreases from 0.00229 to 0.00093 (−59.3%). Its α is 0.0000, the smallest \|α\| of layer 0.
+
+| Layers | Heads with a higher MSE than in config 1 |
+|---|---|
+| 0 | 12 of 32 (×1.05 to ×2.68) |
+| 1–8 and 11–14 | 0 |
+| 9 and 10 | 1 of 32 in each layer (×1.18 and ×1.15) |
+| 15 | 28 of 32 (×1.21 to ×6.88) |
+
+Layers 0 and 15 have the shortest gates (mean γ 0.698 and 0.128). Only in these two layers, many heads have a higher MSE. In layer 0, the 12 heads with a higher MSE have a mean \|α\| of 0.049, and the other 20 heads 0.008.
+
+**Check against the gain rule of the plan**:
+
+| Part of the rule | Result | Met |
+|---|---|---|
+| Validation loss at least 5% below config 1 | −23.2% | Yes |
+| Lower MSE of layer 15, head 14 | 0.234 → 0.052 (−77.6%), 11.5% → 3.4% of the loss | Yes |
+| No accuracy loss of more than approximately 2 points | ARC-Easy −6.6 (z ≈ −4.9). PIQA −1.4 and MMLU −1.8, neither clear. | No |
+
+**Finding 1: R1b gives the lowest stage 1 loss of all runs, but no gain by the rule of the plan**. The loss is 23.2% below config 1, and the MSE of layer 15, head 14 is 77.6% lower. But ARC-Easy falls clearly. This is the first run in which a lower loss comes with a clear accuracy loss. In the earlier fd32 runs, the losses went from 3.42 to 8.16, and the accuracies stayed in small ranges ([second round](experiments/second-round.md)).
+
+**Finding 2: `hybrid` solves the problem of R1**. The gated branch learns. The loss fell from approximately 9 at step 100 to approximately 4 at step 266. This agrees with P6.
+
+**Finding 3: the local heads improve through the short gate, probably not through the window branch**. Heads 14 and 23 of layer 15 have 76–78% less MSE (C1 alone: −7.8% for head 14). But their α values are 0.0008 and 0.0024, among the smallest of layer 15. Layer 0, head 2 (previous token) shows the same: −59.3%, with α ≈ 0. A probable mechanism: in layers 0 and 15, the gate is short. Thus the gated branch becomes a local attention over the last few tokens. The decay gives the position information that the window branch does not have (no RoPE). For layer 0, head 2, this is a second way to find "one token back", besides C5 (`window_rope`). Thus R1b does not show an effect of the removed ceiling (P2) on these heads. `branch_weights` can measure the share of each branch. R1b changes three options, so this run cannot assign the decrease to one option.
+
+**Finding 4: in layer 15, the shared gate moves the error from two heads to the other 30 heads**. One gate serves all 32 heads of a layer. The gate of layer 15 fell to 0.128 (config 1: 0.999). Thus in every head of layer 15, the gated branch now keeps approximately one token back. This suits the local heads 14 and 23. The other heads lose their long memory. 28 of the 32 heads have a higher MSE than in config 1, and only heads 0, 14, 23 and 24 improve. The mean of the other 30 heads is 2.3× that of config 1. For the whole layer, the two effects almost cancel (+1.7%). Layer 0, the other layer with a short gate, shows the same pattern on a smaller scale. There, 12 heads have a higher MSE, but the whole layer improves by 43.8%. C4 (`gate_per_head`) addresses this case: local heads need a fast decay, and long-range heads need γ ≈ 1 (section 5.2 of [gap analysis 2](12-gap-analysis-2.md)).
+
+**Finding 5: possible causes of the ARC-Easy loss**. These are hypotheses. They are not tested yet.
+
+1. **Layer 15**. It is the last layer, and its output goes directly to the LM head. No later layer can correct its error. 28 of its 32 heads have a higher MSE than in config 1, up to 6.9×.
+2. **Position in the sequence**. With `row`, the code normalizes both branches, so their ratio does not depend on the position. With `hybrid` and γ ≈ 1, the gated weights grow with each token, but the window weights stay bounded. Thus the window share decreases approximately as 1 / position. In the training chunks of 2,048 tokens, positions 0–127 give only 6.25% of the loss. PIQA and ARC-Easy are 0-shot, with short prompts. Take the prompt of the longest answer choice of each question. Its median length is 132 characters for PIQA and 139 for ARC-Easy. Its 95th percentile is 355 and 311 characters. With approximately 4 characters for each token (an estimate), 95% of these prompts have fewer than approximately 90 tokens.
+3. **Teacher forcing**. The stage 1 loss gives each layer the input of the teacher. It does not measure errors that grow from layer to layer.
+
+**Proposed next steps** (not decided):
+
+1. Evaluate R1b and config 1 with the softmax attention of the teacher in layer 15 (A10, no training). If ARC-Easy of R1b returns to approximately 36, layer 15 causes the loss. The two models then show if the lower MSE of layers 0–14 gives higher accuracies. This needs a model config with `softmax_attentions: [15]` and the `DISTILL_CKPT` override of `compare_stages.sh`.
+2. Add the MSE of position ranges (0–127, 128–511, 512–2,047) to `layer_mse.py`. This checks cause 2.
+3. Measure the share of each branch for each head in layers 0 and 15 with `branch_weights` (A10, no training). This checks the mechanism of finding 3.
+4. If cause 1 holds: R1b with `gate_per_head: true` (one change, approximately 2.3 hours on the H200). Expected: the other 30 heads of layer 15 return to approximately the MSE of config 1, and heads 14 and 23 stay low.
+
+**Decision for the plan**: by the rule, R1b has no gain, and the plan stops. But the rule does not cover this case. The loss and the MSE of 15 layers decrease much, and the accuracy loss has a probable cause in one layer. Proposal: R2–R6 wait for steps 1–3.
+
 ## Limits
 
 - **XAI scripts**: `attention_weights.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `layer_mse.py` is correct for all v2 options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.
+- **α in `compare_stages.py`**: the column "Alpha" of `summary.md` is the mean of the signed α values. `hybrid` uses \|α\|. For R1b, the difference is small, because the most negative α is −0.011.
 - **`gla_norm: none` with `feature_activation: exp`**: the gated weights have no upper limit (P2). Training can become unstable.
 - **`gla_norm: joint`** gives the gated branch almost no weight at the start values (P6). It also uses max(α, 0): if training pushes α below 0, the window branch stops, and α gets no gradient. `hybrid` uses \|α\|.
 - **Not tested**: bfloat16, sequences of 2,048 tokens, and the speed and memory of the options for each head.
