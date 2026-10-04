@@ -22,7 +22,7 @@ attention:
   num_meta: 4                               # sink logits t_j enter the window denominator as exp(t_j) (D5)
 
   # v2 options (defaults = v1)
-  gla_norm: row                 # row (v1, Section 3.1 parallel form) | none (C3-i, Section 3.1 recurrent and Section 4) | joint (C3-ii, LoLCATs)
+  gla_norm: row                 # row (v1, Section 3.1 parallel form) | none (C3-i, Section 3.1 recurrent and Section 4) | joint (exact scale, gated branch almost off: docs/13) | hybrid (C3-ii, LoLCATs scaling)
   alpha_per_head: false         # C1: one alpha for each head (LoLCATs default)
   alpha_init: 1.0               # start value of alpha
   train_alpha: true             # false: alpha stays at alpha_init (the paper lists only phi, W_gamma and t as learnable)

@@ -8,8 +8,13 @@ so each experiment changes one option (docs/13-lizard-attention-v2.md):
 - gla_norm ('row'): normalization of the gated branch (D1, C3)
     'row'   - one denominator for the gated branch: the parallel form of Section 3.1 (v1)
     'none'  - no denominator: the recurrent form of Section 3.1 and the matrix form of Section 4
-    'joint' - one denominator for both branches and the sinks, as in the LoLCATs hybrid attention.
-              Each row is a weighted mean of values, with the sinks absorbing weight (needs alpha >= 0)
+    'joint' - one denominator for both branches and the sinks, on the exact scale exp(score).
+              Each row is a weighted mean of values, with the sinks absorbing weight (needs alpha >= 0).
+              The gated weights (at most 2) get a share of about exp(-max score), so the gated branch
+              is almost off at the start values (docs/13, run R1)
+    'hybrid'  - one denominator, as in the LoLCATs hybrid attention: window and sink weights are
+              exp(x - m) with m = max(row max of the window scores, max t), the gated weights are not
+              scaled. Thus both branches stay comparable. Uses |alpha|
 - alpha_per_head (False): one window weight alpha for each head (C1, the LoLCATs default)
 - train_alpha (True): train alpha. The paper lists only phi, W_gamma and t as learnable
 - feature_map_per_head (False): one Hedgehog map for each head (D2, C2, the LoLCATs default)
@@ -34,7 +39,7 @@ from .linear_attention import softmax_attention
 from .lizard_attention import gate_products, window_mask, sink_softmax, upcast, LizardAttentionCache
 
 
-GLA_NORMS = ('row', 'none', 'joint')
+GLA_NORMS = ('row', 'none', 'joint', 'hybrid')
 FEATURE_ACTIVATIONS = ('softmax', 'exp')
 
 
@@ -71,6 +76,15 @@ def joint_shift(scores: torch.Tensor, meta: torch.Tensor) -> torch.Tensor:
     """
     m = scores.masked_fill(~torch.isfinite(scores), 0).amax(-1, keepdim=True)
     return m.clamp_min(0).maximum(meta.max()).detach()
+
+
+def hybrid_shift(scores: torch.Tensor, meta: torch.Tensor) -> torch.Tensor:
+    """
+    max(row max of the window scores, max sink logit) over the last dim, detached
+    -> As in LoLCATs (exp(score - row max)) and in sink_softmax: window and sink weights become <= 1.
+       Each row has its current token in the window, so the row max is finite
+    """
+    return scores.amax(-1, keepdim=True).maximum(meta.max()).detach()
 
 
 class LolcatsLizardAttentionV2(nn.Module):
@@ -213,6 +227,8 @@ class LolcatsLizardAttentionV2(nn.Module):
             alpha = alpha[None, :, None, None]
         if self.gla_norm == 'joint':  # The joint denominator needs alpha >= 0 (docs/13, P2)
             alpha = alpha.clamp_min(0)
+        elif self.gla_norm == 'hybrid':  # |alpha| keeps a gradient when alpha crosses 0
+            alpha = alpha.abs()
         return alpha, self.meta_tokens.to(dtype)
 
     def window_inputs(self, q: torch.Tensor, k: torch.Tensor, rope) -> tuple:
@@ -241,6 +257,12 @@ class LolcatsLizardAttentionV2(nn.Module):
                    + alpha * ((scores - m).exp().sum(-1, keepdim=True)
                               + (meta - m).exp().sum(-1, keepdim=True)))
             return (-m).exp() * w / den, alpha * (scores - m).exp() / den
+        if self.gla_norm == 'hybrid':
+            m = hybrid_shift(scores, meta)
+            den = (w.sum(-1, keepdim=True)
+                   + alpha * ((scores - m).exp().sum(-1, keepdim=True)
+                              + (meta - m).exp().sum(-1, keepdim=True)))
+            return w / den, alpha * (scores - m).exp() / den
         if self.gla_norm == 'row':
             w = w / w.sum(-1, keepdim=True).clamp_min(torch.finfo(w.dtype).tiny)
         return w, alpha * sink_softmax(scores, meta)
@@ -264,6 +286,13 @@ class LolcatsLizardAttentionV2(nn.Module):
             e = (scores - m).exp()
             num = (-m).exp() * (w @ v) + alpha * (e @ v)
             den = ((-m).exp() * w.sum(-1, keepdim=True)
+                   + alpha * (e.sum(-1, keepdim=True) + (meta - m).exp().sum(-1, keepdim=True)))
+            y = num / den
+        elif self.gla_norm == 'hybrid':
+            m = hybrid_shift(scores, meta)
+            e = (scores - m).exp()
+            num = w @ v + alpha * (e @ v)
+            den = (w.sum(-1, keepdim=True)
                    + alpha * (e.sum(-1, keepdim=True) + (meta - m).exp().sum(-1, keepdim=True)))
             y = num / den
         else:
@@ -322,6 +351,12 @@ class LolcatsLizardAttentionV2(nn.Module):
                     num = (-m).exp() * num_gla + a * torch.einsum('bhn,bhnd->bhd', e, v_cache)
                     den = ((-m).exp() * den_gla
                            + a * (e.sum(-1, keepdim=True) + (meta - m).exp().sum(-1, keepdim=True)))
+                    y.append(num / den)
+                elif self.gla_norm == 'hybrid':
+                    m = hybrid_shift(scores, meta)
+                    e = (scores - m).exp()
+                    num = num_gla + a * torch.einsum('bhn,bhnd->bhd', e, v_cache)
+                    den = den_gla + a * (e.sum(-1, keepdim=True) + (meta - m).exp().sum(-1, keepdim=True))
                     y.append(num / den)
                 else:
                     y_gla = num_gla / den_gla.clamp_min(tiny) if self.gla_norm == 'row' else num_gla

@@ -1,11 +1,10 @@
 name: llama-1b
 # Lizard attention v2 (src/model/linear_attention/lizard_attention_v2.py, docs/13-lizard-attention-v2.md)
 # Copy of distill_llama3_2_1b_lizard_w128_fd32_m4_fp32.yaml with attention_type lolcats_llama_lizard_v2.
-# Run R1 of the experiment plan in docs/13-lizard-attention-v2.md: the three parts of the per-head limit of
-# docs/12-gap-analysis-2.md (section 3) together: C1 alpha_per_head, C2 feature_map_per_head, C3-ii gla_norm joint.
-# All other options keep their defaults.
-# STOPPED at 19% of epoch 0 (loss_mse 9.3): joint leaves the gated branch almost no weight at the start values
-# (docs/13-lizard-attention-v2.md). Use distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid.yaml (R1b).
+# Run R1b of the experiment plan in docs/13-lizard-attention-v2.md: the three parts of the per-head limit of
+# docs/12-gap-analysis-2.md (section 3) together: C1 alpha_per_head, C2 feature_map_per_head, C3-ii gla_norm hybrid
+# (LoLCATs scaling), with alpha starting at 0.1 as the LoLCATs window factor. R1 used gla_norm joint and stopped,
+# because joint leaves the gated branch almost no weight at the start values. All other options keep their defaults.
 model:
   pretrained_model_name_or_path: "meta-llama/Llama-3.2-1B"
   cache_dir: "/workspace/lolcats/scratch/"   # CHANGE this
@@ -25,11 +24,11 @@ attention:
   num_meta: 4                               # sink logits t_j enter the window denominator as exp(t_j) (D5)
 
   # v2 options (defaults = v1)
-  gla_norm: joint               # R1 CHANGE (C3-ii) -- row (v1, Section 3.1 parallel form) | none (C3-i, Section 3.1 recurrent and Section 4) | joint (C3-ii, LoLCATs)
-  alpha_per_head: true          # R1 CHANGE -- C1: one alpha for each head (LoLCATs default)
-  alpha_init: 1.0               # start value of alpha
+  gla_norm: hybrid              # R1b CHANGE (C3-ii) -- row (v1, Section 3.1 parallel form) | none (C3-i, Section 3.1 recurrent and Section 4) | joint (exact scale, gated branch almost off: docs/13) | hybrid (C3-ii, LoLCATs scaling)
+  alpha_per_head: true          # R1b CHANGE -- C1: one alpha for each head (LoLCATs default)
+  alpha_init: 0.1               # R1b CHANGE -- start value of alpha (LoLCATs window factor: sigmoid(-2.197) = 0.1)
   train_alpha: true             # false: alpha stays at alpha_init (the paper lists only phi, W_gamma and t as learnable)
-  feature_map_per_head: true    # R1 CHANGE -- C2 / D2: one Hedgehog map for each head (LoLCATs default)
+  feature_map_per_head: true    # R1b CHANGE -- C2 / D2: one Hedgehog map for each head (LoLCATs default)
   feature_activation: softmax   # D3: softmax (Table 13, v1) | exp (Section 4)
   gate_per_head: false          # C4: one gate for each head (the paper uses one gate for all heads)
   gate_bias_init: null          # C6: a bias in W_gamma with this start value, e.g. 3.0 (gamma ~ 0.95)

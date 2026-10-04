@@ -35,6 +35,9 @@ OPTIONS = {
                   'gate_per_head': True, 'gate_bias_init': 3.0, 'window_rope': True},
     'all_none_exp': {'gla_norm': 'none', 'alpha_per_head': True, 'feature_map_per_head': True,
                      'feature_activation': 'exp', 'gate_per_head': True, 'window_rope': True},
+    'norm_hybrid': {'gla_norm': 'hybrid'},
+    'all_hybrid': {'gla_norm': 'hybrid', 'alpha_per_head': True, 'alpha_init': 0.1, 'feature_map_per_head': True,
+                   'gate_per_head': True, 'gate_bias_init': 3.0, 'window_rope': True},
 }
 
 
@@ -83,7 +86,8 @@ def reference(layer, x, position_ids=None):
     """
     Loop form of docs/math-formula.md for one layer, before o_proj, shape (b, h, l, d)
     - gated branch (section 2): sum_t prod_{l=t+1}^{i} gamma_l phi_q(q_i).phi_k(k_t) v_t, with
-      the denominator of the parallel form ('row'), without it ('none'), or shared with the window ('joint')
+      the denominator of the parallel form ('row'), without it ('none'), or shared with the window ('joint').
+      'hybrid' shares it too, with the window and sink weights divided by exp(max(window scores, t))
     - window branch (section 1): window of the last w positions, sinks exp(t_j) in the denominator (D5)
     - Hedgehog map (section 7): [act(W x) (+) act(-W x)], act = softmax or exp, W of the head or shared
     """
@@ -117,17 +121,22 @@ def reference(layer, x, position_ids=None):
                     weight = torch.prod(g[t + 1:i + 1]) * (fq @ phi(layer.phi_k.weight, hi, k[bi, hi, t]))
                     num_gla = num_gla + weight * v[bi, hi, t]
                     den_gla = den_gla + weight
-                num_win, den_win = torch.zeros(d), meta.exp().sum()
+                num_win, den_win, top = torch.zeros(d), meta.exp().sum(), meta.max()
                 for t in range(max(0, i - WINDOW + 1), i + 1):
-                    e = torch.exp(qw[bi, hi, i] @ kw[bi, hi, t] / math.sqrt(d))
+                    score = qw[bi, hi, i] @ kw[bi, hi, t] / math.sqrt(d)
+                    e = torch.exp(score)
                     num_win = num_win + e * v[bi, hi, t]
                     den_win = den_win + e
+                    top = torch.maximum(top, score)
                 if layer.gla_norm == 'row':
                     y[bi, hi, i] = num_gla / den_gla + a_h * num_win / den_win
                 elif layer.gla_norm == 'none':
                     y[bi, hi, i] = num_gla + a_h * num_win / den_win
-                else:  # joint
+                elif layer.gla_norm == 'joint':
                     y[bi, hi, i] = (num_gla + a_h * num_win) / (den_gla + a_h * den_win)
+                else:  # hybrid
+                    scale = abs(a_h) * torch.exp(-top)
+                    y[bi, hi, i] = (num_gla + scale * num_win) / (den_gla + scale * den_win)
     return y
 
 
@@ -191,7 +200,7 @@ def test_decode_matches_parallel(name):
 
 
 # 4. Causality: a change at position j does not change earlier outputs
-@pytest.mark.parametrize('name', ['defaults', 'norm_joint', 'all_joint', 'all_none_exp'])
+@pytest.mark.parametrize('name', ['defaults', 'norm_joint', 'all_joint', 'all_none_exp', 'all_hybrid'])
 def test_causal(name):
     layer = make_layer(seed=4, **OPTIONS[name])
     x = torch.randn(1, LENGTH, 32)
@@ -205,7 +214,8 @@ def test_causal(name):
 
 
 # 5. XAI hook: the branch weights times v give the output
-@pytest.mark.parametrize('name', ['defaults', 'norm_none', 'norm_joint', 'all_joint', 'all_none_exp'])
+@pytest.mark.parametrize('name', ['defaults', 'norm_none', 'norm_joint', 'all_joint', 'all_none_exp',
+                                  'norm_hybrid', 'all_hybrid'])
 def test_branch_weights_reproduce_output(name):
     layer = make_layer(seed=5, **OPTIONS[name])
     x = torch.randn(2, LENGTH, 32)
@@ -219,7 +229,7 @@ def test_branch_weights_reproduce_output(name):
         mass = (a_gla + a_win).sum(-1)
         if layer.gla_norm == 'row':  # the gated branch sums to 1 (D1)
             assert torch.allclose(a_gla.sum(-1), torch.ones(()), atol=1e-12)
-        if layer.gla_norm == 'joint':  # a weighted mean of values: the sinks absorb the rest
+        if layer.gla_norm in ('joint', 'hybrid'):  # a weighted mean of values: the sinks absorb the rest
             assert (mass < 1).all() and (mass > 0).all()
 
 
@@ -301,3 +311,53 @@ def test_model_conversion_and_cached_decoding():
             out = model(ids[:, t:t + 1], past_key_values=out.past_key_values, use_cache=True)
             decoded.append(out.logits)
         assert rel_err(torch.cat(decoded, dim=1), student) < 1e-6
+
+
+# 9. Every trainable Lizard parameter gets a finite, nonzero gradient from the stage 1 loss
+@pytest.mark.parametrize('name', OPTIONS)
+def test_every_lizard_parameter_gets_a_gradient(name):
+    layer = make_layer(seed=8, **OPTIONS[name])
+    layer.train_attention = True
+    x = torch.randn(2, LENGTH, 32)
+    _, ((_, _), (y_pred, y_true)), _ = layer(x, position_ids=torch.arange(LENGTH)[None])
+    ((y_pred - y_true) ** 2).mean().backward()
+    # The q, k, v, o projections are frozen in training (load_and_convert_attns); o_proj is not in this loss
+    trainable = {n: p for n, p in layer.named_parameters() if p.requires_grad and not n.endswith('_proj.weight')}
+    assert set(trainable) >= {'phi_q.weight', 'phi_k.weight', 'W_gamma.weight', 'meta_tokens'}
+    for n, p in trainable.items():
+        assert p.grad is not None and torch.isfinite(p.grad).all() and p.grad.abs().sum() > 0, n
+
+
+def gated_share(layer, length=128):
+    """Mean share of the gated branch in the rows after the first window"""
+    torch.manual_seed(9)
+    x = torch.randn(1, length, 32)
+    with torch.no_grad():
+        q, k, v = qkv(layer, x)
+        gamma = torch.sigmoid(layer.W_gamma(x)).transpose(1, 2)
+        a_gla, a_win = layer.branch_weights(q, k, gamma)
+    return (a_gla.sum(-1) / (a_gla.sum(-1) + a_win.sum(-1)))[..., layer.window:].mean().item()
+
+
+# 10. At the start values, the gated branch must keep a share of the weight. With 'joint' it does not
+#     (docs/13, run R1): its gated weights get a factor exp(-max score). A window of 32 tokens, because
+#     with very few keys the largest window score is often negative, which hides the effect
+def test_gated_share_at_start_values():
+    base = make_base(seed=10)
+    start = lambda **o: LolcatsLizardAttentionV2(base, layer_idx=0, window_size=32, num_meta=4,
+                                                 feature_dim=FEATURES, **o).eval()
+    shares = {'row': gated_share(start()), 'joint': gated_share(start(gla_norm='joint')),
+              'hybrid': gated_share(start(gla_norm='hybrid', alpha_init=0.1))}
+    assert shares['row'] > 0.3, shares
+    assert shares['hybrid'] > 0.3, shares
+    assert shares['joint'] < 0.01, shares
+
+
+# 11. 'hybrid' uses |alpha|: the sign of alpha does not change the output
+def test_hybrid_alpha_sign():
+    layer = make_layer(seed=11, gla_norm='hybrid')
+    x = torch.randn(1, LENGTH, 32)
+    with torch.no_grad():
+        y = layer(x)[0]
+        layer.alpha_blend.neg_()
+        assert torch.equal(layer(x)[0], y)

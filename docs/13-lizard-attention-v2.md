@@ -1,6 +1,6 @@
 # 13. Lizard attention v2
 
-**Status:** Implemented and tested on CPU (37 checks pass, float64). One stage 1 run finished: C1, one α for each head (validation loss 3.8092, −4.2% against config 1, no accuracy gain). See "Experiment C1".
+**Status:** Implemented and tested on CPU (37 checks pass, float64). One stage 1 run finished: C1, one α for each head (validation loss 3.8092, −4.2% against config 1, no accuracy gain). See "Experiment C1". R1 (`gla_norm: joint`) stopped at 19% of epoch 0, because `joint` leaves the gated branch almost no weight (P6). R1b uses `gla_norm: hybrid`.
 
 v2 is a new attention file: `src/model/linear_attention/lizard_attention_v2.py`. It has the layer of v1 (`lizard_attention.py`) and a model config option for each reading of the paper. It also has an option for each code change of [gap analysis 2](12-gap-analysis-2.md) (C1–C6). The default options give the outputs of v1 exactly. Thus each experiment changes one option, as section 5.2 of gap analysis 2 requires. v1 does not change.
 
@@ -27,7 +27,7 @@ The [math against code](math-code-discrepancy.md) comparison lists the readings 
 
 | Option | Values (default first) | Source | Reading of the paper (version 4) |
 |---|---|---|---|
-| `gla_norm` | `row`, `none`, `joint` | D1, C3 | `row` is the parallel form of Section 3.1 (v1). `none` is the recurrent form of Section 3.1 and the matrix form of Section 4. `joint` is one denominator for both branches and the sinks, as in LoLCATs. |
+| `gla_norm` | `row`, `none`, `joint`, `hybrid` | D1, C3 | `row` is the parallel form of Section 3.1 (v1). `none` is the recurrent form of Section 3.1 and the matrix form of Section 4. `joint` is one denominator for both branches and the sinks, on the scale exp(score). Its gated branch gets almost no weight at the start values (P6). `hybrid` is the LoLCATs form: one denominator, with the window and sink weights divided by exp(m). m is the larger of the row maximum of the window scores and the largest sink logit. |
 | `alpha_per_head` | `false`, `true` | C1, X1 | The paper gives one α. The LoLCATs default has one window factor for each head. |
 | `alpha_init`, `train_alpha` | `1.0`, `true` | D14 | The paper does not call α learnable (see "Literature check"). `train_alpha: false` keeps α at `alpha_init`. |
 | `feature_map_per_head` | `false`, `true` | D2, C2 | Probably the reading of Appendix B: the LoLCATs default has one map for each head. |
@@ -66,7 +66,7 @@ These parts stay as in v1:
 - one feature map for each head,
 - one denominator for both branches.
 
-The LoLCATs code divides the window weights by $\exp(\max_t s_{it})$, but not the linear weights. Thus its effective window factor changes with the row. The `joint` option of v2 applies the same shift to both branches, so the result is exact.
+The LoLCATs code divides the window weights by $\exp(\max_t s_{it})$, but not the linear weights. The `joint` option of v2 applies the same shift to both branches, so the result is an exact joint softmax. Run R1 showed the problem of this choice (P6). The gated weights are at most 2, but the window weights reach $\exp(\max_t s_{it})$. The LoLCATs scaling keeps the two branches comparable. The `hybrid` option uses it.
 
 ## Proof audit
 
@@ -85,7 +85,9 @@ Mathbox skill `proof-audit`. Self-review of the revision `a677e3c` (`docs/math-f
 | **P4**: The written sink term $\sum_j t_j$ can make the denominator of the window branch 0 or negative | Proved | With $m = 4$ and one key with score 0: $t_j = -1$ gives a denominator of −3, and $t_j = -0.25$ gives 0. With $\sum_j \exp(t_j)$, the denominator is always positive. |
 | **P5**: The decode forms of `joint` and `window_rope` equal their parallel forms | Proved, with a condition | `joint`: P1b for the gated sums, and the same window sums over the cached keys. `window_rope`: RoPE scores depend only on $t - i$, so cached keys rotated at their own positions are correct. The condition: the model passes the true positions when it decodes. |
 
-**Remaining gaps**. The paper itself does not settle D1, D3 and α. v2 does not settle them either. It makes them testable.
+| **P6**: `joint` keeps a usable gated share at the start values. | Refuted when the largest window score is positive. | Let m be the largest window score. The gated weights get the factor $e^{-m}$, and each gated weight is at most 2 with softmax features. The measured shares at the start values are 7e-4 at m ≈ 2, 2e-4 at m ≈ 5 and 5e-6 at m ≈ 10. The measurement used 1B sizes, random q and k, and 1,024 tokens. `row` gives 0.50. `hybrid` with α = 0.1 gives 0.05–0.39. Test 10 checks this. |
+
+**Remaining gaps**. The paper itself does not settle D1, D3 and α. v2 does not settle them either. It makes them testable. P2 showed that `joint` removes the ceiling, but it did not check if the gated branch can still learn. P6 covers this, after run R1.
 
 ## Implementation
 
@@ -113,15 +115,18 @@ Mathbox skill `computation-audit`.
 | # | Check | Options | Result |
 |---|---|---|---|
 | 1 | Defaults against v1: forward pass, distillation outputs, and prefill with token-by-token decode | Defaults | Identical (`torch.equal`) |
-| 2 | Parallel form against the loop form of the math document | 12 sets: each option alone, and 2 combinations | 12 pass, relative error < 1e-10 |
-| 3 | Decode against the parallel form: prefill 3 tokens, one call with 2 tokens, then one token at a time past the window | The same 12 sets | 12 pass, relative error < 1e-10 |
-| 4 | A change at position 7 does not change the outputs before position 7 | 4 sets | 4 pass |
-| 5 | `branch_weights` times v gives the output. The weights are causal, non-negative and inside the window. `row`: the gated weights sum to 1. `joint`: each row sums to less than 1. | 5 sets | 5 pass |
+| 2 | Parallel form against the loop form of the math document | 14 sets: each option alone (with `hybrid`), and 3 combinations | 14 pass, relative error < 1e-10 |
+| 3 | Decode against the parallel form: prefill 3 tokens, one call with 2 tokens, then one token at a time past the window | The same 14 sets | 14 pass, relative error < 1e-10 |
+| 4 | A change at position 7 does not change the outputs before position 7 | 5 sets | 5 pass |
+| 5 | `branch_weights` times v gives the output. The weights are causal, non-negative and inside the window. `row`: the gated weights sum to 1. `joint` and `hybrid`: each row sums to less than 1. | 7 sets | 7 pass |
 | 6 | Parameter counts at the size of Llama-3.2-1B (feature dimension 32): C1 +31, C2 4,096 → 131,072, C4 +31 × 2,048, C6 +1 for each layer. These agree with the table in section 5.2 of gap analysis 2. | C1, C2, C4, C6 | Pass |
 | 7 | Window share: `row` stays at most 0.7 / 1.7. `joint` goes above it. | `row`, `joint` | Pass |
 | 8 | In a tiny `LolcatsLlamaForCausalLM` (2 layers): conversion, the teacher mode, the evaluation path with `use_cache=True`, and generation with prefill and decode | `all_joint` combination | Pass, relative error < 1e-6 (the model casts the logits to float32) |
+| 9 | Each Lizard parameter gets a finite gradient that is not 0, from the stage 1 loss | The same 14 sets | 14 pass |
+| 10 | At the start values, the gated branch keeps a share of the weight (window 32, 128 positions): `row` above 0.3, `hybrid` above 0.3, `joint` below 0.01 (P6) | `row`, `joint`, `hybrid` | Pass: 0.50, 0.74 and 0.002 |
+| 11 | `hybrid` uses \|α\|: a negative α gives the same output | `hybrid` | Pass |
 
-**Negative controls**. Four errors went into a copy of v2, one at a time. Each error made checks fail:
+**Negative controls**. Seven errors went into a copy of v2, one at a time. Each error made checks fail. The first four ran against the first 37 checks, and the last three against all 60 checks:
 
 | Error | Failed checks |
 |---|---|
@@ -129,6 +134,9 @@ Mathbox skill `computation-audit`.
 | Decode: the gate of head 0 for all heads | 4 |
 | `window_rope`: keys without RoPE in the prefill cache | 4 |
 | `exp`: the wrong sign in the second half of the map | 2 |
+| `hybrid`: no sinks in the denominator of the parallel form | 8 |
+| `hybrid`: no sinks in the denominator of the decode form | 2 |
+| `hybrid`: α without the absolute value | 1 |
 
 **Command** (from the repository root):
 
@@ -136,7 +144,7 @@ Mathbox skill `computation-audit`.
 python -m pytest -q tests/test_lizard_attention_v2.py
 ```
 
-**Environment**: CPU, Python 3.11, torch 2.0.1, transformers 4.43.1, pytest 9.1.1. Result: 37 passed in approximately 3 seconds. The manifest of the run with the provenance runner of `computation-audit` is in [`lizard-attention-v2/`](lizard-attention-v2/).
+**Environment**: CPU, Python 3.11, torch 2.0.1, transformers 4.43.1, pytest 9.1.1. Result: 60 passed in approximately 3 seconds (37 before `hybrid` and checks 9–11). The manifests of the runs with the provenance runner of `computation-audit` are in [`lizard-attention-v2/`](lizard-attention-v2/) (37 checks) and [`lizard-attention-v2/run-002/`](lizard-attention-v2/run-002/) (60 checks).
 
 **Outcome**: implementation and finite assertion verified in the stated range. The loop reference comes from the math document, not from the code. But it reads the formulas as the table "Options" does. Thus it cannot find a wrong reading of the paper.
 
@@ -263,7 +271,7 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 **Finding 4: on MMLU, the answers are still at the level of guessing**. A model that ignores the questions and uses the same letter shares gets 24.6. C1 gets 23.9.
 
-**Decision for the plan**: C1 alone gives no gain. R1 is the next run.
+**Decision for the plan**: C1 alone gives no gain. R1 is the next run (it became R1b, see "Run R1 (stopped)").
 
 ## Experiment plan with fewer runs
 
@@ -280,10 +288,11 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 | Run | v2 options (all others keep their defaults) | Question | Run only if | Decision |
 |---|---|---|---|---|
 | B0 | None: config 1 of the second round | Reference | Exists (validation loss 3.9764) | – |
-| **R1** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: joint` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6 |
-| R2 | R1 without `gla_norm: joint` | Is the joint denominator (a deviation) necessary? | R1 has a gain | R2 within 2% of R1: keep R2 |
-| R3 | R1 without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1 has a gain | R3 within 2% of R1: keep R3 |
-| W | The best config of R1–R3, with the fewest deviations | – | – | – |
+| R1 | `alpha_per_head`, `feature_map_per_head`, `gla_norm: joint` | Does the removal of the per-head limit lower the loss? | – | Stopped at 19% of epoch 0: the gated branch had almost no weight (P6). Replaced by R1b. |
+| **R1b** | `alpha_per_head`, `feature_map_per_head`, `gla_norm: hybrid`, `alpha_init: 0.1` | Does the removal of the per-head limit lower the loss? | Always | No gain: stop the architecture path and skip R2–R6 |
+| R2 | R1b without `gla_norm: hybrid` and `alpha_init: 0.1` | Is the joint denominator (a deviation) necessary? | R1b has a gain | R2 within 2% of R1b: keep R2 |
+| R3 | R1b without `alpha_per_head` | Is one α for each head (a deviation) necessary? | R1b has a gain | R3 within 2% of R1b: keep R3 |
+| W | The best config of R1b, R2 and R3, with the fewest deviations | – | – | – |
 | R4 | W + `window_rope` + `gate_bias_init: 3.0` | Do position information for the local heads and a gate start near 1 add a gain? | Always after W | No gain: drop both options |
 | R5 | W + `gate_bias_init: 3.0` | Which of the two options gives the gain? The effect of `window_rope` is R4 − R5. | R4 has a gain | Keep the options with a gain |
 | R6 | The best config so far + `gate_per_head` | Does one gate for each head add a gain? | X3 predicts a decrease of the loss of 5% or more | Keep only with a gain |
@@ -291,11 +300,11 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 **Number of runs**:
 
-- **R1 has no gain**: 1 stage 1 run. The plan then stops.
-- **Normal case**: 4–5 stage 1 runs (R1, R2, R3, R4, maybe R5) and 1 stage 2 run.
+- **R1b has no gain**: 1 stage 1 run. The plan then stops.
+- **Normal case**: 4–5 stage 1 runs (R1b, R2, R3, R4, maybe R5) and 1 stage 2 run. The stopped R1 adds approximately 0.5 hours.
 - **One option at a time**: at least 8 stage 1 runs, before any combination.
 
-**The C1 run** finished: −4.2% validation loss and no accuracy gain ("Experiment C1"). Thus `alpha_per_head` probably adds little to R1, and R3 probably keeps the gain of R1. R3 must run to show this. A config that removes C1 without a run would be untested.
+**The C1 run** finished: −4.2% validation loss and no accuracy gain ("Experiment C1"). Thus `alpha_per_head` probably adds little to R1b, and R3 probably keeps the gain of R1b. R3 must run to show this. A config that removes C1 without a run would be untested.
 
 **Screens without training** (optional, A10, forward passes only). They need a small extension of `layer_mse.py` with `branch_weights`:
 
@@ -309,32 +318,41 @@ The checkpoint has 496 more parameters than config 1 (98,384): 31 extra α value
 
 | Option | Why it is not in the plan | When to run it |
 |---|---|---|
-| `gla_norm: none` | It removes the ceiling as `joint` does (P2), but the total weight of a row has no constant value (up to 2i with softmax features). `joint` is the LoLCATs default. | Only if the thesis needs the recurrent form of the paper |
+| `gla_norm: none` | It removes the ceiling as `hybrid` does (P2), but the total weight of a row has no constant value (up to 2i with softmax features). `hybrid` is the LoLCATs default. | Only if the thesis needs the recurrent form of the paper |
+| `gla_norm: joint` | P6: the gated branch gets almost no weight at the start values. Run R1 stopped. | Not again |
 | `feature_activation: exp` | Only the log-space form of Section 4 needs it (P3), and v2 uses the dense form. No XAI result points at it. With `gla_norm: none`, its weights have no upper limit. | Only for the reading question D3 |
-| `train_alpha: false`, `alpha_init` | It conflicts with `alpha_per_head` in R1. It answers only a reading question: the paper does not call α learnable. | Only for the reading question of α |
+| `train_alpha: false` | It conflicts with `alpha_per_head` in R1b. It answers only a reading question: the paper does not call α learnable. R1b uses `alpha_init: 0.1` with `hybrid`, as LoLCATs. | Only for the reading question of α |
 
-### Run R1
+### Run R1 (stopped)
 
-**Config**: `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint`. The stage 1 recipe is config 1 of the second round, as in B0.
+**Config**: `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint` (`alpha_per_head`, `feature_map_per_head`, `gla_norm: joint`). The stage 1 recipe is config 1 of the second round.
+
+- **GPU memory** on HF Jobs: approximately 22 GB, against 29 GB for C1. With `joint`, the backward pass does not keep the weight matrix of the window branch. This matrix has 32 heads × 2,048 × 2,048 values in float32, thus 512 MiB for each layer. The gradients of α and of the sink logits need only the row sums. Measured for one layer at the size of Llama-3.2-1B and 2,048 tokens: 1.21 GiB kept for the backward pass with C1, 0.71 GiB with R1. For 16 layers, the difference is 8 GiB.
+- **Gradients**: all five types of Lizard parameters got a gradient (CPU check, tiny layer).
+- **Loss**: `loss_mse` was 10.1–11.2 at step 0 and 9.3 at 19% of epoch 0 (gradient step approximately 112, near the end of the warmup). For comparison, config 2 had a `loss_mse` of approximately 7.2 at gradient step 181.
+- **Decision**: stopped at 19% of epoch 0. With `joint`, the gated branch has almost no weight at the start values (P6). Thus R1 cannot test the question of the plan.
+
+### Run R1b
+
+**Config**: `distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid`. It is R1 with `gla_norm: hybrid` (the LoLCATs scaling) and `alpha_init: 0.1`, the start value of the LoLCATs window factor. The stage 1 recipe is config 1 of the second round, as in B0.
+
+At the start values (1B sizes, random q and k, 1,024 tokens), the gated branch has a share of 0.05–0.39 with these settings (P6). With `joint`, it had 5e-6 to 7e-4.
 
 ```bash
 make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=4h \
-  ARGS="--model_config distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b --no_finetune"
+  ARGS="--model_config distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid --distill_config distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b --no_finetune"
 ```
 
-- **Time**: approximately 2.5 hours. A map for each head does the same calculation for each head as the shared map. The joint denominator adds no matrix product.
-- **Checkpoint**: `checkpoints/distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b-m=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt`
-- **Evaluation**: the command of "Experiment C1", with `MODEL_CONFIG=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_joint`.
-- **CPU check**. `distill_llama.main()` trained stage 1 with this config on a tiny Llama (3 layers, 4 heads). The checks:
-  - The layers were `LolcatsLizardAttentionV2`.
-  - `phi_q.weight` had the shape (4, 8, 16), one map for each head.
-  - `alpha_blend` had the shape (4,).
-  - The checkpoint got the name above.
-  - The final text generation check stopped with the `token_type_ids` error of the tiny test tokenizer, as in "Experiment C1".
+- **Time**: approximately 2.5 hours.
+- **GPU memory**: approximately 22 GB, as R1. `hybrid` keeps the same tensors for the backward pass (0.71 GiB for each layer).
+- **Checkpoint**: `checkpoints/distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-3_paper_noclip_1b-m=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0_distill.pt`
+- **Evaluation**: the command of "Experiment C1", with `MODEL_CONFIG=distill_llama3_2_1b_lizard_v2_w128_fd32_m4_fp32_perhead_hybrid`.
+- **First check during the run**: the `Eval step` lines (`hf jobs logs <job id> | grep -a "Eval step"`). The loss must decrease clearly after the warmup (gradient step 118). R1 stayed near 9–11.
+- **CPU check**. `distill_llama.main()` trained stage 1 with this config on a tiny Llama (3 layers, 4 heads). The layers were `LolcatsLizardAttentionV2`, `phi_q.weight` had the shape (4, 8, 16), and `alpha_blend` had the shape (4,). The validation loss decreased at each evaluation. The final text generation check stopped with the `token_type_ids` error of the tiny test tokenizer, as in "Experiment C1".
 
 ## Limits
 
 - **XAI scripts**: `attention_weights.py` and `ablate.py` calculate the v1 form. Their results are correct for v2 only with the default options. `layer_mse.py` is correct for all v2 options. `compare_stages.py` reports the gate of head 0 when `gate_per_head` is true.
 - **`gla_norm: none` with `feature_activation: exp`**: the gated weights have no upper limit (P2). Training can become unstable.
-- **`gla_norm: joint`** uses max(α, 0). If training pushes α below 0, the window branch stops, and α gets no gradient.
+- **`gla_norm: joint`** gives the gated branch almost no weight at the start values (P6). It also uses max(α, 0): if training pushes α below 0, the window branch stops, and α gets no gradient. `hybrid` uses \|α\|.
 - **Not tested**: bfloat16, sequences of 2,048 tokens, and the speed and memory of the options for each head.
