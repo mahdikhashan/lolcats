@@ -81,7 +81,18 @@ A second answer from ChatGPT (2026-10-05) lists more reproduction studies. The f
 - **Its reproduction package agrees with addition 3 of section 5.** The run record needs the commit, configs, data order, seeds and harness version.
 - **It repeats two errors of the first answer.** The MMLU values "23% instead of 32%" are not in these notes. The teacher gets 33.7 on the MMLU subset in this harness, and 31.0 in the paper (claim 1). It also calls GLA plus the window "the proposed architecture" (claim 2).
 
-## 7. Limits
+## 7. A third answer
+
+A third answer from ChatGPT (2026-10-05) lists reproduction studies of attention layers and training recipes. The folder `reproduction-studies` keeps [the third answer](reproduction-studies/third-answer.md) without changes. This document does not check its sources.
+
+- **New works:** a reproduction study of partial residual ablations (2026), RoBERTa, independent code of "Attention Is All You Need" and AttentionSmithy. The answer itself says that the GitHub projects are not peer reviewed.
+- **The three levels fit these notes.** Level 1 (math against code) is [math against code](math-code-discrepancy.md) and the float64 tests against the jku-thesis reference. Level 2 (the layer inside the model) is [document 8](08-verification.md). Level 3 (training) is [document 4](04-training-runs.md) and the experiments.
+- **RoBERTa agrees with the BERT4Rec point of section 6.** A recipe can train too little. The recipe experiments of these notes already form a part of the proposed matrix, for example the 2 × 2 grid of [document 11](11-gap-analysis.md).
+- **The residual study gives a pattern: discrepancy, cause in the measurement, correction, new run.** These notes have such a case. The stage 1 loss is a measurement that does not predict the accuracy ([document 14](14-liger-gla.md)).
+- **Some items do not apply.** Stage 1 uses the MSE, so it has no distillation temperature. Lizard replaces only the attention, and the residual paths and the norms of Llama stay the same.
+- **It repeats the two errors of the first answer.** The MMLU values "22–23%" and "~32%" do not match these notes (claim 1). Its diagrams put "GLA + SWA" after the reproduction, as a change of Lizard (claim 2).
+
+## 8. Limits
 
 - This document does not check the cited papers. Section 2 lists each source and its status.
 - The comparison in section 3 uses only these notes. A claim of the answer can be correct for the cited work and still not apply to this project.
