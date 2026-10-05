@@ -100,6 +100,7 @@ def get_attention(attention_type: str, **kwargs: any):
     -> 'linear and sliding_window' == 'lolcats_llama_window_*'
     -> 'gated linear and sliding window with sinks' == 'lolcats_llama_lizard'
     -> the same with options for the readings of the paper (docs/13) == 'lolcats_llama_lizard_v2'
+    -> math-aligned Lizard, alpha fixed by default (docs/16) == 'lolcats_llama_lizard_v3'
     """
     kwargs['attention_type'] = attention_type
 
@@ -126,6 +127,10 @@ def get_attention(attention_type: str, **kwargs: any):
     elif attention_type == 'lolcats_llama_lizard_v2':
         from .linear_attention import LolcatsLizardAttentionV2
         return partial(LolcatsLizardAttentionV2, **kwargs)
+
+    elif attention_type == 'lolcats_llama_lizard_v3':
+        from .linear_attention import LolcatsLizardAttentionV3
+        return partial(LolcatsLizardAttentionV3, **kwargs)
 
     ## Experimental chunked linear attentions below
     elif attention_type == 'lolcats_long_llama_window_tk':
