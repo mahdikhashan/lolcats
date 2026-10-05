@@ -71,7 +71,17 @@ The answer proposes a thesis structure from the reproduction study of Behavior T
 
 Not adopted: a small model trained from the start (claim 10) and weight norms for each branch (claim 5).
 
-## 6. Limits
+## 6. A second answer
+
+A second answer from ChatGPT (2026-10-05) lists more reproduction studies. The folder `reproduction-studies` keeps [the second answer](reproduction-studies/second-answer.md) without changes. This document does not check its sources.
+
+- **New works:** MultiBERTs, the BERT4Rec replicability study, Mieskes (2022), A Primer in BERTology, Belz et al. (2021), ReproNLP 2024, Vaugrante et al. and ReproEvalCard.
+- **BERT4Rec applies to stage 1.** According to the answer, the default config reproduced the paper only after much longer training. In all float32 runs of this project, the stage 1 validation loss still decreased at the end. H3 of [gap analysis 2](12-gap-analysis-2.md) (4 epochs) tests this.
+- **MultiBERTs agrees with claims 4 and 9.** One checkpoint describes one run, not the recipe. Thus more seeds and checkpoints during training are necessary.
+- **Its reproduction package agrees with addition 3 of section 5.** The run record needs the commit, configs, data order, seeds and harness version.
+- **It repeats two errors of the first answer.** The MMLU values "23% instead of 32%" are not in these notes. The teacher gets 33.7 on the MMLU subset in this harness, and 31.0 in the paper (claim 1). It also calls GLA plus the window "the proposed architecture" (claim 2).
+
+## 7. Limits
 
 - This document does not check the cited papers. Section 2 lists each source and its status.
 - The comparison in section 3 uses only these notes. A claim of the answer can be correct for the cited work and still not apply to this project.
