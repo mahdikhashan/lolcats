@@ -29,6 +29,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | – | [Math formulas](math-formula.md) | The equations of the paper, each with its source and its code. They include the gated branch, the window branch, the stage 1 loss and the hardware-aware algorithm. |
 | – | [Math against code](math-code-discrepancy.md) | Each formula of the paper next to the code, with a list of 17 differences, their types and their possible effects |
 | – | [References](references.md) | External sources, each with a link and a short description: the MMLU evaluation details of Meta for Llama 3.2, and an MMLU replication notebook |
+| – | [Definitions](appendix-definitions.md) | An appendix for the thesis. It gives short definitions of fine-tuning, causal language modeling, RLHF, packing, the EOS token, padding, context size and batch. An answer from ChatGPT, kept without changes. |
 
 ## Experiments
 
