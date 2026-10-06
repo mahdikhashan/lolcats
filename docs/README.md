@@ -30,6 +30,7 @@ Each number in these notes has one of two labels. A **measured** number comes fr
 | – | [Math against code](math-code-discrepancy.md) | Each formula of the paper next to the code, with a list of 17 differences, their types and their possible effects |
 | – | [References](references.md) | External sources, each with a link and a short description: the MMLU evaluation details of Meta for Llama 3.2, and an MMLU replication notebook |
 | – | [Definitions](appendix-definitions.md) | An appendix for the thesis. It gives short definitions of fine-tuning, causal language modeling, RLHF, packing, the EOS token, padding, context size and batch. An answer from ChatGPT, kept without changes. |
+| – | [Evaluation](evaluation.md) | An answer from ChatGPT about the metrics for the evaluation of Lizard, kept without changes. It covers perplexity, benchmarks, BERTScore, KL divergence of the logits and efficiency. Its example tables do not contain results of this project. |
 
 ## Experiments
 
