@@ -1,6 +1,6 @@
 # Figures
 
-Figures for the thesis. Each figure has a caption and a check against these notes. The figures came into the notes on 2026-10-06. They do not state their source.
+Figures for the thesis. Each figure has a caption and a check against these notes. The figures came into the notes on 2026-10-06. The source of figures 1 and 2 (the two training stages) is a [tldraw board](https://www.tldraw.com/f/T5KBfJOv5daAR5rH1rYv3?d=v-219.-590.2124.1849.page).
 
 | # | File | Contents |
 |---|---|---|
