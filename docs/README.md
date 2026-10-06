@@ -49,6 +49,15 @@ Each experiment has its own document in `experiments/`, with its method, its run
 | [XAI: layer-wise MSE](experiments/xai-layer-wise-mse.md) | In which layers does the stage 1 Lizard attention differ most from the teacher attention? A plot like Figure 14 of the LoLCATs paper, from saved checkpoints without retraining. | Run 1 done (five stage 1 checkpoints): the script reproduces each stored loss. Layer 15 gives 24–31% of the loss, and its heads 14 and 23 alone give up to 21%. The recipes of the paper differ most from the LoLCATs recipe in layers 0–3 and 13–15. |
 | [XAI: sample attention weights](experiments/xai-sample-attention-weight.md) | Does Lizard reproduce the attention weights of the teacher, also outside its window? Plots like Figures 18–21 of the LoLCATs paper, for stage 1, stage 2 and the initial weights. | Run 1 done (four checkpoints): mean TV distance 0.31–0.33 (initial weights 0.71). Local teacher heads match worst, because all heads of a layer get almost the same long-range share. Layer 15, head 14 is a local head. |
 
+## Figures
+
+The folder `figures/` keeps the figures for the thesis. [figures/README.md](figures/README.md) gives each figure with its caption and a check against these notes.
+
+| # | Figure | Contents |
+|---|---|---|
+| 1 | [Stage 1](figures/lizard-stage1.webp) | Stage 1 of the Lizard paper: the teacher, the data, the trained parts and the MSE loss |
+| 2 | [Stage 2](figures/lizard-stage2.webp) | Stage 2 of the Lizard paper: LoRA, the causal language modeling loss and the settings of both stages |
+
 ## Glossary
 
 These notes use each term below with one meaning only.
