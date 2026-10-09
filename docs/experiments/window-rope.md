@@ -67,7 +67,7 @@ make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2
 ```
 
 - **Recipe:** the job runs `make lizard`. Its default distill config is the LoLCATs recipe of Run 1. `--model_config` replaces the model config of the target.
-- **Time and cost:** approximately 2.5 hours and $12. The first run (2026-10-10) trained at 1.24 sequences each second, thus approximately 63 minutes for each epoch. Stage 1 of Run 1 (v1, bf16) had approximately 3.2 sequences each second ([document 2](../02-compute-and-cost.md)). The cause of the difference is not checked. `HF_TIMEOUT=2h` is too short: the job stops before the end of the second epoch.
+- **Time and cost:** the first run (2026-10-10) used `HF_FLAVOR=a100-large` and `HF_TIMEOUT=6h`. It trained at 1.24 sequences each second, thus approximately 63 minutes for each epoch, approximately 2.5 hours and $6 in total. The A100 is slow for this code, because the Lizard calculations use float32 without TF32 ([document 2](../02-compute-and-cost.md)). Stage 1 of Run 1 (v1, bf16) had approximately 3.2 sequences each second on the H200. The speed of v2 on the H200 is not measured. Thus `HF_TIMEOUT=4h` keeps a margin there. On the A100, use `HF_TIMEOUT=6h`.
 - **First check during the run:** `hf jobs logs <job id> | grep -a "Eval step"`. The loss must decrease. Run 1 ended at 3.2549.
 - **Checkpoint on the Hub:**
 
