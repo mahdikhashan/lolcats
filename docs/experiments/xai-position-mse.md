@@ -37,6 +37,14 @@ This is X1 of [document 20](../20-layer-mse-for-piqa-arc.md). In which query pos
 - `--exclude` removes a checkpoint by its label, for example the LoLCATs control.
 - **Output:** `OUT.md` with the tables, and `OUT.png` with the accuracy against the loss of each bucket.
 
+`heatmap` draws one heatmap for each result: the layers in the rows, the buckets in the columns.
+
+- **Value:** the relative MSE by default, because it compares the layers ([XAI: layer-wise MSE](xai-layer-wise-mse.md), finding 3). `--absolute` gives 1000 × MSE.
+- **Color:** one blue scale for all panels, light for small values and dark for large values. Each cell also shows its value.
+- **Log scale:** if the values span more than a factor of 20, the scale is logarithmic over at most 3 decades. Smaller values, such as the bf16 rounding of LoLCATs, get the lightest color.
+- **Output:** `OUT.png`, and `OUT.md` with the same values as tables.
+- **A finer grid:** compute with more edges, for example `--edges 0,64,128,256,512,1024,2048`.
+
 ## The accuracy table
 
 | Checkpoint (label) | PIQA | ARC-Easy | Source |
@@ -91,6 +99,11 @@ python scripts/position_mse.py rank results/position_mse/rank_all results/positi
 python scripts/position_mse.py rank results/position_mse/rank_lizard results/position_mse/*.json \
   --accuracy docs/experiments/xai-position-mse/accuracy.csv --exclude "LoLCATs attention"
 
+# Heatmaps: all checkpoints (log scale), and Lizard alone (linear scale, more detail)
+python scripts/position_mse.py heatmap results/position_mse/heatmap_all $(ls results/position_mse/*.json)
+python scripts/position_mse.py heatmap results/position_mse/heatmap_lizard \
+  $(ls results/position_mse/*.json | grep -v lolcats_attention)
+
 zip -r position-mse-$(date +%Y%m%d-%H%M).zip results/position_mse
 ```
 
@@ -120,6 +133,8 @@ CPU, 2026-10-09, in a copy of the repository with tiny random Llama models and a
 | Default edges with sequences of 1024 tokens | Buckets 0–127, 128–511 and 512–1023. The script cuts the edge 2048 to the sequence length. |
 | `rank` on synthetic results with the 9 labels of `accuracy.csv` | A score equal to 100 − PIQA gives ρ = −1.00 with p = 9.9e-5. Two PIQA values tie (57.5), so 4 of the 40,320 orders reach \|ρ\| = 1. All ρ values equal `scipy.stats.spearmanr`. The p-values agree with the sampled permutation test of scipy. |
 | `rank --exclude "LoLCATs attention"` | 8 of 9 results remain |
+| `heatmap` on the tiny results (3 and 4 buckets in one figure) | One panel for each result. LoLCATs at positions 0–255 gets the lightest color, with its value (approximately 3e-14 and 7e-14) in the cells. |
+| `heatmap` on 8 synthetic results (16 layers, 3 buckets) | A 2 × 4 grid. With LoLCATs: a log scale. Without LoLCATs: a linear scale, and the eighth panel stays empty. `--absolute` writes 1000 × MSE. |
 
 The values of the tiny models do not predict the values at 1B.
 
