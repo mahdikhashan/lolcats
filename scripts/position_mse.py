@@ -21,6 +21,11 @@ MSE between the teacher's softmax attention and Lizard attention for each bucket
      correlation means: a lower MSE comes with a higher accuracy
    - p: the two-sided permutation p-value of the rank correlation (exact up to 9 checkpoints)
    - Writes OUT.md (the tables) and OUT.png (the accuracy against the loss of each bucket)
+-> heatmap: layers x buckets for each result, one color scale for all panels, written to OUT.png and OUT.md
+   python scripts/position_mse.py heatmap OUT RESULT.json [RESULT.json ...] [--absolute]
+   - Default: the relative MSE (comparable between layers). --absolute: mse_factor x MSE
+   - A log color scale if the values span more than a factor of 20 (e.g., with the LoLCATs control)
+   - For a finer grid, compute with more edges, e.g. --edges 0,64,128,256,512,1024,2048
 """
 import argparse
 import csv
@@ -36,6 +41,8 @@ import torch
 from layer_mse import COLORS, GRID, LABEL_HELP, TEXT, TEXT_2, dump, load
 
 TASKS = {'piqa': 'PIQA', 'arc_easy': 'ARC-Easy'}
+# Sequential ramp for magnitudes: one hue (blue), from light (near 0) to dark
+RAMP = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b']
 
 
 def bucket_name(b):
@@ -272,6 +279,83 @@ def rank(args):
     print(f'-> Wrote {args.out}.md and {args.out}.png (the numbers are the rows of the first table)')
 
 
+# --- heatmap ---
+
+def heatmap(args):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap, LogNorm, Normalize
+
+    results = []
+    for path in args.results:
+        with open(path) as f:
+            results.append(json.load(f))
+    key = 'mse' if args.absolute else 'relative_mse'
+    grids = [[[(r['mse_factor'] if args.absolute else 1.0) * b[key] for b in l['buckets']] for l in r['layers']]
+             for r in results]
+    values = [v for g in grids for row in g for v in row]
+    low, high = min([v for v in values if v > 0] or [1.0]), max(values)
+    if high / low > 20:  # log scale over at most 3 decades: smaller values (e.g., rounding) get the lightest color
+        floor = max(low, high * 1e-3)
+        norm = LogNorm(floor, high)
+    else:
+        floor, norm = 0.0, Normalize(0, high)
+    cmap = LinearSegmentedColormap.from_list('ramp', RAMP)
+    name = f"{results[0]['mse_factor']:g} × MSE" if args.absolute else 'Relative MSE'
+    title = (f"{name} for each layer and bucket of query positions" if args.absolute else
+             'Relative MSE (MSE / mean square of the teacher output) for each layer and bucket of query positions')
+
+    ncols = min(4, len(results))
+    nrows = math.ceil(len(results) / ncols)
+    n_buckets = max(len(r['buckets']) for r in results)
+    n_layers = max(len(r['layers']) for r in results)
+    fig, axes = plt.subplots(nrows, ncols, squeeze=False, constrained_layout=True,
+                             figsize=(ncols * (1.0 + 0.8 * n_buckets) + 1.4, nrows * (1.0 + 0.27 * n_layers)))
+    for k, (r, g) in enumerate(zip(results, grids)):
+        ax = axes[k // ncols][k % ncols]
+        image = ax.imshow([[max(v, floor) for v in row] for row in g], cmap=cmap, norm=norm, aspect='auto')
+        for i, row in enumerate(g):
+            for j, v in enumerate(row):  # dark ink on light cells, white ink on dark cells
+                ax.text(j, i, f'{v:.2g}', ha='center', va='center', fontsize=7,
+                        color='white' if norm(max(v, floor)) > 0.5 else TEXT)
+        ax.set_xticks(range(len(r['buckets'])))
+        ax.set_xticklabels([bucket_name(b) for b in r['buckets']], fontsize=8, color=TEXT_2)
+        ax.set_yticks(range(len(g)))
+        ax.set_yticklabels([str(l['layer']) for l in r['layers']], fontsize=8, color=TEXT_2)
+        ax.set_xticks([x - 0.5 for x in range(1, len(r['buckets']))], minor=True)  # 2px gaps between cells
+        ax.set_yticks([y - 0.5 for y in range(1, len(g))], minor=True)
+        ax.grid(which='minor', color='white', linewidth=2)
+        ax.tick_params(which='both', length=0)
+        for side in ax.spines.values():
+            side.set_visible(False)
+        ax.set_title(r['label'], color=TEXT, fontsize=9)
+        ax.set_xlabel('Query positions', color=TEXT, fontsize=8)
+        if k % ncols == 0:
+            ax.set_ylabel('Layer', color=TEXT, fontsize=9)
+    for k in range(len(results), nrows * ncols):
+        axes[k // ncols][k % ncols].set_visible(False)
+    fig.suptitle(title, color=TEXT, fontsize=10)
+    bar = fig.colorbar(image, ax=axes.ravel().tolist(), shrink=0.8, extend='min' if low < floor else 'neither')
+    bar.set_label(name, color=TEXT, fontsize=8)
+    bar.ax.tick_params(colors=TEXT_2, labelsize=8)
+    bar.outline.set_visible(False)
+    fig.savefig(f'{args.out}.png', dpi=200, facecolor='white')
+
+    # The same values as tables, for the experiment documents
+    lines = [title, '']
+    for r, g in zip(results, grids):
+        names = [bucket_name(b) for b in r['buckets']]
+        mean = [b['loss'] if args.absolute else b['relative_mse'] for b in r['buckets']]  # means over the layers
+        lines += [f"**{r['label']}**", '', '| Layer | ' + ' | '.join(names) + ' |', '|---' * (len(names) + 1) + '|']
+        lines += [f"| {l['layer']} | " + ' | '.join(f'{v:.4g}' for v in row) + ' |' for l, row in zip(r['layers'], g)]
+        lines += ['| Mean | ' + ' | '.join(f'{v:.4g}' for v in mean) + ' |', '']
+    with open(f'{args.out}.md', 'w') as f:
+        f.write('\n'.join(lines))
+    print('\n'.join(lines))
+    print(f'-> Wrote {args.out}.png and {args.out}.md')
+
+
 def get_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -292,6 +376,10 @@ def get_args():
     c.add_argument('--cache_dir', default=None, help="Replaces the model config's cache_dir")
     c.add_argument('--seed', type=int, default=0)
     c.add_argument('--replicate', type=int, default=0)
+    h = commands.add_parser('heatmap')
+    h.add_argument('out', help='Output path without extension: writes OUT.png and OUT.md')
+    h.add_argument('results', nargs='+', help='JSON files of compute')
+    h.add_argument('--absolute', action='store_true', help='mse_factor x MSE instead of the relative MSE')
     r = commands.add_parser('rank')
     r.add_argument('out', help='Output path without extension: writes OUT.md and OUT.png')
     r.add_argument('results', nargs='+', help='JSON files of compute')
@@ -302,4 +390,4 @@ def get_args():
 
 if __name__ == '__main__':
     args = get_args()
-    compute(args) if args.command == 'compute' else rank(args)
+    {'compute': compute, 'rank': rank, 'heatmap': heatmap}[args.command](args)
