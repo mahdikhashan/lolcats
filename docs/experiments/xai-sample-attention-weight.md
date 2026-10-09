@@ -265,6 +265,15 @@ Only q, k and v differ between the heads, and stage 1 does not train them. The g
 | 3. Position patterns inside the window are harder without RoPE | The sharp diagonals of layer 0 (heads 0 and 2) are missing, and the diagonal of layer 15, head 2 is weaker. The content stripes stay (findings 3 and 7). | Yes, qualitatively |
 | 4. Layer 15, heads 14 and 23 have much teacher weight outside the window | Head 14 has only 8.7%, head 23 has 39%. The error of head 14 comes from the far weight of Lizard (finding 6). | No |
 
+### Run 2 attempt: six Lizard v1 checkpoints (2026-10-09)
+
+The script ran for the 6 checkpoints with the v1 attention. These are fd32 and fd128 with the LoLCATs recipe, the recipe of the paper in bf16 and float32, and configs 1 and 2. All 6 runs stopped with an error, so there is no result.
+
+- **Cause:** the session did not restrict the GPUs (`CUDA_VISIBLE_DEVICES` was not active). The model ran on several GPUs of `student06`.
+- **bf16 configs:** the teacher uses FlashAttention-2, which stopped on a GPU older than Ampere.
+- **float32 configs:** a matrix product found tensors on two GPUs.
+- **Next:** run again with only the A10 visible. The script does not support the v2 checkpoints (C1, R1b) or the LoLCATs attention, because it calculates the weights of the v1 attention.
+
 ### Interpretation
 
 - **Lizard reproduces long-range heads well and local heads badly**. This is the opposite of the expectation for a model with an exact softmax window. Two properties of this code probably cause it. First, the heads of a layer share all its Lizard parameters (finding 5). Second, the gated branch always gives each row a weight of 1. Lizard also has no RoPE, so the window branch cannot reproduce sharp position patterns (prediction 3).

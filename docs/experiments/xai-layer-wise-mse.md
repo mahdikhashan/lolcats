@@ -1,6 +1,6 @@
 # Experiment (XAI): layer-wise MSE
 
-**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss. Run 2 on 2026-10-09 added the original LoLCATs attention as a control. In every layer, its MSE is at least 3.0× lower than the MSE of each of the 7 Lizard checkpoints. In LoLCATs, the two heads of layer 15 give only 1.9% of the loss.
+**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss. Run 2 on 2026-10-09 added the original LoLCATs attention as a control. In every layer, its MSE is at least 3.0× lower than the MSE of each of the 7 Lizard checkpoints. In LoLCATs, the two heads of layer 15 give only 1.9% of the loss. Run 3 on 2026-10-09 added config 2 (gradient clipping). In every layer, its MSE is 0.51–0.95 × that of config 1. Its loss is within 2.7% of the LoLCATs recipe.
 
 ## Question
 
@@ -250,7 +250,7 @@ The gate values come from one MMLU prompt ([second round](second-round.md), [flo
 
 1. **Attention maps of layer 15, heads 14 and 23**, in the teacher: how much attention falls outside the window of 128 tokens.
 2. **Softmax attention in layer 15, as an ablation**: a model config with `softmax_attentions: [15]` keeps the teacher attention in that layer. In stage 1, each layer got the teacher input during training. Thus the stage 1 weights of layers 0–14 can probably stay unchanged. This needs a check of the loader, which then finds unexpected keys for layer 15.
-3. **Config 2 (gradient clipping)**: trained, with a stored loss of 3.5092. Add its checkpoint to the plot.
+3. **Config 2 (gradient clipping)**: done in Run 3.
 4. **Stage 2**: extend the script to stage 2 checkpoints (LoRA weights), for the second part of Figure 14.
 5. **One precision**: run the three bf16 checkpoints again with `--torch_dtype float32`, to compare all checkpoints at the same precision.
 
@@ -286,3 +286,42 @@ The comparison uses the five checkpoints of Run 1 and the two v2 checkpoints C1 
 **Finding 10: layer 0 has the largest ratio in every Lizard checkpoint** (30.4–121.3×). The relative MSE of LoLCATs in layer 0 is 0.011, the lowest of all layers. For fd128 it is 0.400. This agrees with finding 8 of the [control](lolcats-control.md). The window of LoLCATs has RoPE and gives the local attention of layer 0, but the window of Lizard has no RoPE.
 
 **Limits**: each layer gets the teacher input. The window of LoLCATs is larger (128–255 tokens against 128), and its feature maps have 28× more parameters than fd128. This run cannot separate these causes.
+
+### Run 3: config 2 and all 8 Lizard checkpoints (2026-10-09)
+
+- **Commands:** `layer_mse.py compute` for all 9 checkpoints, then `plot` for the 8 Lizard checkpoints. The same loop ran `position_mse.py` ([XAI: MSE by token position](xai-position-mse.md), Run 1).
+- **Machine and code:** `student06`, lolcats `5a2097c`. The session did not restrict the GPUs, so the model ran on several GPUs.
+- **Check:** each checkpoint reproduces its stored loss. Config 2 gives 3.5092 (+0.000%). Against the earlier runs of the other 8 checkpoints, each layer differs by at most 0.073% (bf16) and 0.000% (float32). Thus the earlier JSON files stay in the folder, and Run 3 adds only [`config2.json`](xai-layer-wise-mse/config2.json).
+- **Plots:** the two plots use the JSON files of Run 3.
+
+![Layer-wise MSE of the 8 Lizard stage 1 checkpoints](xai-layer-wise-mse/stage1_all_lizard.png)
+
+![Layer-wise relative MSE of the 8 Lizard stage 1 checkpoints](xai-layer-wise-mse/stage1_all_lizard_relative.png)
+
+Config 2 is config 1 with gradient clipping at 1.0 ([gradient clipping](gradient-clipping.md)). 1000 × MSE and relative MSE of each layer:
+
+| Layer | 1000 × MSE | Relative MSE | Config 2 ÷ config 1 |
+|---|---|---|---|
+| 0 | 0.2246 | 0.494 | 0.84 |
+| 1 | 0.4682 | 0.339 | 0.71 |
+| 2 | 0.5827 | 0.564 | 0.51 |
+| 3 | 1.497 | 0.518 | 0.76 |
+| 4 | 2.744 | 0.437 | 0.86 |
+| 5 | 4.063 | 0.416 | 0.95 |
+| 6 | 4.181 | 0.375 | 0.94 |
+| 7 | 3.323 | 0.271 | 0.93 |
+| 8 | 4.101 | 0.282 | 0.95 |
+| 9 | 4.138 | 0.363 | 0.95 |
+| 10 | 3.145 | 0.306 | 0.94 |
+| 11 | 2.296 | 0.409 | 0.90 |
+| 12 | 2.358 | 0.417 | 0.86 |
+| 13 | 2.863 | 0.355 | 0.77 |
+| 14 | 3.443 | 0.331 | 0.83 |
+| 15 | 16.72 | 0.551 | 0.89 |
+| Mean (the loss) | 3.5092 | – | 0.88 |
+
+**Finding 11: clipping lowers the MSE in every layer, most of all where the gap is**. Against config 1, the MSE is 0.51–0.95 × in all 16 layers. The largest decreases are in layers 2 (0.51 ×), 1 (0.71 ×), 3 (0.76 ×) and 13 (0.77 ×). These are the layers of finding 7. The loss is 11.8% lower.
+
+**Finding 12: config 2 almost reaches the LoLCATs recipe**. Its MSE is 0.99–1.29 × that of fd32 with the LoLCATs recipe, and lower in 1 of 16 layers. The loss is 2.7% higher. Layer 15 still gives 29.8% of the loss, and heads 14 and 23 alone give 20.4% (finding 5).
+
+**Finding 13: config 2 is also far from LoLCATs**. Against LoLCATs, the MSE of config 2 is 4.2× (layer 10) to 45.6× (layer 0) higher. Thus all 8 Lizard checkpoints have at least 3.0× the MSE of LoLCATs in each layer (Run 2, finding 8).
