@@ -62,12 +62,12 @@ The job runs the code inside the image, and the image does not have the new conf
 ### 2. Stage 1 on HF Jobs (H200)
 
 ```bash
-make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=2h \
+make hf-job IMAGE=mahdikhashan/lolcats HF_REPO=nanoman1/lolcats-lizard-llama-3.2-1b HF_FLAVOR=h200 HF_TIMEOUT=4h \
   ARGS="--model_config distill_llama3_2_1b_lizard_v2_w128_fd128_m4_windowrope --no_finetune"
 ```
 
 - **Recipe:** the job runs `make lizard`. Its default distill config is the LoLCATs recipe of Run 1. `--model_config` replaces the model config of the target.
-- **Time and cost:** approximately 1 hour and $5. This is an estimate: stage 1 of Run 1 (bf16) took approximately 50 minutes ([document 2](../02-compute-and-cost.md)).
+- **Time and cost:** approximately 2.5 hours and $12. The first run (2026-10-10) trained at 1.24 sequences each second, thus approximately 63 minutes for each epoch. Stage 1 of Run 1 (v1, bf16) had approximately 3.2 sequences each second ([document 2](../02-compute-and-cost.md)). The cause of the difference is not checked. `HF_TIMEOUT=2h` is too short: the job stops before the end of the second epoch.
 - **First check during the run:** `hf jobs logs <job id> | grep -a "Eval step"`. The loss must decrease. Run 1 ended at 3.2549.
 - **Checkpoint on the Hub:**
 
