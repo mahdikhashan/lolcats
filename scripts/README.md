@@ -11,6 +11,7 @@ These scripts evaluate the Lizard model and help to find the cause of the gap to
 | `ablate.py` | Evaluates the Lizard model with the gated branch or the window branch disabled during inference. | [Document 6](../docs/06-evaluation-setup.md), [document 7, section 5](../docs/07-results.md), [XAI ideas, section 5](../docs/experiments/xai.md) |
 | `layer_mse.py` | Calculates the MSE between the teacher attention and the Lizard attention for each layer, from a stage 1 checkpoint. Plots the layers of several checkpoints, as Figure 14 of the LoLCATs paper. | [XAI: layer-wise MSE](../docs/experiments/xai-layer-wise-mse.md) |
 | `attention_weights.py` | Calculates the attention weights of the teacher and of Lizard (stage 1, stage 2 or the initial weights) on packed Alpaca samples. Plots them as Figures 18–21 of the LoLCATs paper, with metrics for all heads. | [XAI: sample attention weights](../docs/experiments/xai-sample-attention-weight.md) |
+| `position_mse.py` | Calculates the MSE of `layer_mse.py` for each bucket of query positions (0–127, 128–511, 512–2047). Ranks several checkpoints by the MSE of each bucket against their PIQA and ARC-Easy accuracy. | [XAI: MSE by token position](../docs/experiments/xai-position-mse.md) |
 
 ## How to run
 
@@ -27,6 +28,8 @@ python scripts/layer_mse.py compute results/layer_mse/<name>.json --model_config
 python scripts/layer_mse.py plot results/layer_mse/<plot name> results/layer_mse/<name>.json ...
 python scripts/attention_weights.py compute results/attention_weights/<name>.json --model_config <model config> --distill_config <distill config> [--stage 2]
 python scripts/attention_weights.py plot results/attention_weights/<plot name> results/attention_weights/<name>.json ...
+python scripts/position_mse.py compute results/position_mse/<name>.json --from_json docs/experiments/xai-layer-wise-mse/<name>.json
+python scripts/position_mse.py rank results/position_mse/<name> results/position_mse/*.json --accuracy docs/experiments/xai-position-mse/accuracy.csv
 ```
 
-The comments at the top of each script give all options. The shell scripts, `ablate.py`, `layer_mse.py compute` and `attention_weights.py compute` need the `lolcats-env` conda environment and a GPU. `compare_stages.sh` explains the setup.
+The comments at the top of each script give all options. The shell scripts, `ablate.py`, `layer_mse.py compute`, `attention_weights.py compute` and `position_mse.py compute` need the `lolcats-env` conda environment and a GPU. `compare_stages.sh` explains the setup.

@@ -57,7 +57,9 @@ def download(path, repo_id):
     return hf_hub_download(repo_id, path, local_dir='.')
 
 
-def compute(args):
+def load(args):
+    """The model in distillation mode with the stage 1 checkpoint, the configs, the checkpoint check
+    and the validation loader. Also used by scripts/position_mse.py"""
     sys.path.insert(0, '.')  # as distill_llama.py, run from the repo root
     sys.path.append('./src')
     from omegaconf import OmegaConf
@@ -99,7 +101,11 @@ def compute(args):
               f"{len(check['values_not_loaded'])} not loaded, step {check['step']}, losses {check['losses']}")
 
     dataloaders = load_data(distill_config.dataset, distill_config.dataloader)
-    loader = dataloaders[distill_config.trainer.val_split]
+    return model, model_config, distill_config, check, dataloaders[distill_config.trainer.val_split]
+
+
+def compute(args):
+    model, model_config, distill_config, check, loader = load(args)
     criterion = torch.nn.MSELoss(reduction='mean')  # as in src/trainer/distill_attention_xent_mse.py
     sums, batches, tokens = None, 0, 0
     with torch.no_grad():
