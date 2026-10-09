@@ -1,0 +1,5 @@
+{
+  "gate_task": "hendrycksTest-high_school_us_history",
+  "prompt_tokens": 2048,
+  "layers": []
+}

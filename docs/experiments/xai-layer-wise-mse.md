@@ -1,6 +1,6 @@
 # Experiment (XAI): layer-wise MSE
 
-**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss.
+**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss. Run 2 on 2026-10-09 added the original LoLCATs attention as a control. In every layer, its MSE is at least 3.0× lower than the MSE of each of the 7 Lizard checkpoints. In LoLCATs, the two heads of layer 15 give only 1.9% of the loss.
 
 ## Question
 
@@ -241,7 +241,7 @@ The gate values come from one MMLU prompt ([second round](second-round.md), [flo
 ### Interpretation
 
 - **The stage 1 loss mainly measures the last layers**. The loss uses the absolute MSE. Thus each layer counts with the scale of its output, and layers 13–15 give 42–43% of the loss. Each layer has its own Lizard parameters and gets the teacher input. With Adam, the scale of one layer therefore has almost no effect on the training of that layer. But it decides which layers dominate the reported loss.
-- **Two heads of layer 15 are the largest single source of error**. The same two heads lead in every checkpoint, also with fd128. Thus the cause is probably a property of these teacher heads, not of the recipe. One possible property is attention to tokens far outside the window of 128 tokens, which the gated branch cannot reproduce. This is a hypothesis. The attention maps of the teacher can test it (section 9 of [XAI for the distillation](xai.md)).
+- **Two heads of layer 15 are the largest single source of error**. The same two heads lead in every checkpoint, also with fd128. Thus the cause is probably a property of these teacher heads, not of the recipe. One possible property is attention to tokens far outside the window of 128 tokens, which the gated branch cannot reproduce. This is a hypothesis. The attention maps of the teacher can test it (section 9 of [XAI for the distillation](xai.md)). **Correction (2026-10-09):** Run 2 does not support this hypothesis. The LoLCATs attention approximates the same two heads well (finding 9). Thus the cause is in the Lizard attention, not in the teacher heads.
 - **The recipes of the paper fail most in the first layers, in relative terms**. In layer 2, all three runs with the recipe of the paper have a relative MSE above 1. In these runs, the gate of the first layers decays fast. This agrees in part with the gate-state hypothesis of section 13.2 of the [gap analysis](../11-gap-analysis.md).
 - **The second-round settings fix the error mainly where the gap is** (finding 7). Thus β2 and the minimum learning rate help most in the layers where the recipe of the paper is weakest.
 - **The MSE alone does not show the effect on the model output**. An error in layer 15 reaches the logits directly. An error in layer 2 passes through 13 more layers. This run does not measure which error is more harmful for MMLU, PIQA or ARC-Easy.
@@ -253,3 +253,36 @@ The gate values come from one MMLU prompt ([second round](second-round.md), [flo
 3. **Config 2 (gradient clipping)**: trained, with a stored loss of 3.5092. Add its checkpoint to the plot.
 4. **Stage 2**: extend the script to stage 2 checkpoints (LoRA weights), for the second part of Figure 14.
 5. **One precision**: run the three bf16 checkpoints again with `--torch_dtype float32`, to compare all checkpoints at the same precision.
+
+### Run 2: the LoLCATs attention as a control (2026-10-09)
+
+- **Checkpoint**: Run 1 of [LoLCATs attention as a control in stage 1](lolcats-control.md). This is `lolcats_llama_window_tk` on Llama-3.2-1B, with window 128, feature dimension 128, the LoLCATs recipe and bf16. Its stored loss is 0.4442.
+- **Machine and code**: `student06`, A10, lolcats `e523d45`.
+- **Data**: the same 16 validation batches as in Run 1 (32,768 tokens).
+- **Check**: the script gives 0.4444 (+0.044%). All 48 expected tensors loaded.
+- **Files**: [`lolcats_attention_fd128.json`](xai-layer-wise-mse/lolcats_attention_fd128.json) and four plots in [`xai-layer-wise-mse/`](xai-layer-wise-mse/). Run 3 of the [control](lolcats-control.md#run-3-layer-wise-mse-2026-10-09) gives the values of each layer.
+
+The comparison uses the five checkpoints of Run 1 and the two v2 checkpoints C1 and R1b ([document 13](../13-lizard-attention-v2.md)). The ratio of a layer is the MSE of the Lizard checkpoint divided by the MSE of LoLCATs.
+
+| Checkpoint | Loss | Loss ÷ loss of LoLCATs | Smallest ratio of a layer | Ratio in layer 0 | Relative MSE of the layers |
+|---|---|---|---|---|---|
+| fd32, LoLCATs recipe, bf16 | 3.4175 | 7.7 | 3.98 (layer 2) | 39.4 | 0.258–0.558 |
+| fd128, LoLCATs recipe, bf16 | 3.2516 | 7.3 | 3.66 (layer 10) | 36.9 | 0.235–0.537 |
+| fd32, paper recipe, bf16 | 8.1468 | 18.3 | 8.36 (layer 10) | 121.3 | 0.476–4.670 |
+| fd32, paper recipe, float32 | 4.9478 | 11.1 | 5.42 (layer 10) | 69.4 | 0.333–1.923 |
+| Second round, config 1 | 3.9764 | 8.9 | 4.45 (layer 10) | 54.1 | 0.292–1.109 |
+| v2, C1 (α for each head) | 3.8092 | 8.6 | 4.21 (layer 10) | 53.3 | 0.286–1.085 |
+| v2, R1b (`hybrid`, maps for each head) | 3.0542 | 6.9 | 3.01 (layer 2) | 30.4 | 0.201–0.633 |
+| LoLCATs attention | 0.4444 | 1 | – | – | 0.011–0.110 |
+
+![Relative MSE of Lizard Run 1 stage 1 and of the LoLCATs attention, and the change of each layer](xai-layer-wise-mse/lizard_vs_lolcats_attention_relative.png)
+
+![Layer-wise MSE of the LoLCATs attention and of the 7 Lizard stage 1 checkpoints, and the excess of each Lizard checkpoint over LoLCATs](xai-layer-wise-mse/lolcats_vs_all_lizard.png)
+
+**Finding 8: the LoLCATs attention has a lower MSE in every layer, against every Lizard checkpoint**. The smallest ratio is 3.0× (R1b, layer 2). The error of LoLCATs has 1.1–11.0% of the power of the teacher output. The best Lizard checkpoint has 20.1–63.3%. Thus finding 4 is a property of the Lizard attention, not of the pipeline, the data or the recipe.
+
+**Finding 9: the two heads of layer 15 are not hard for LoLCATs**. Heads 14 and 23 have an MSE of 1.29 and 3.03, against 211.4 and 144.2 for fd128. Together they give 1.9% of the loss of LoLCATs, against approximately 21% for fd128 (finding 5). Layer 15 still has the largest MSE of LoLCATs (0.9232), because the teacher output is largest there (finding 3). But it gives only 13.0% of the loss, and its relative MSE (0.031) is the second lowest of all layers.
+
+**Finding 10: layer 0 has the largest ratio in every Lizard checkpoint** (30.4–121.3×). The relative MSE of LoLCATs in layer 0 is 0.011, the lowest of all layers. For fd128 it is 0.400. This agrees with finding 8 of the [control](lolcats-control.md). The window of LoLCATs has RoPE and gives the local attention of layer 0, but the window of Lizard has no RoPE.
+
+**Limits**: each layer gets the teacher input. The window of LoLCATs is larger (128–255 tokens against 128), and its feature maps have 28× more parameters than fd128. This run cannot separate these causes.
