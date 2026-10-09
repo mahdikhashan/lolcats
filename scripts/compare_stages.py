@@ -42,6 +42,7 @@ TASKS = {
     'arc_easy': 'ARC-Easy (0-shot)',
 }
 LIZARD_PARAMS = ('phi_q.weight', 'phi_k.weight', 'W_gamma.weight', 'W_gamma.bias', 'meta_tokens', 'alpha_blend')
+LOLCATS_PARAMS = ('feature_map_q.mlp.layer', 'feature_map_k.mlp.layer', 'window_factors')  # lolcats_llama_window_tk
 GATE_TASK = os.environ.get('GATE_TASK', 'hendrycksTest-high_school_us_history')  # long reading passages
 GATE_MAX_TOKENS = 2048
 KEPT_AFTER = (128, 256, 512)  # tokens back from the last token of the prompt
@@ -69,7 +70,7 @@ def check_checkpoint(model, path, stage):
     """
     Metadata of a checkpoint, and whether the model's trainable parameters hold its values
     -> The loaders only assert that the checkpoint has no unexpected keys (gap analysis, section 3)
-    -> A stage 1 checkpoint must hold every Lizard parameter, a stage 2 checkpoint every LoRA weight
+    -> A stage 1 checkpoint must hold every Lizard (or LoLCATs) parameter, a stage 2 checkpoint every LoRA weight
     """
     checkpoint = torch.load(path, map_location='cpu')
     state_dict = checkpoint['model_state_dict']
@@ -81,7 +82,7 @@ def check_checkpoint(model, path, stage):
     params = {strip(n): p for n, p in model.named_parameters()}
     tensors = {strip(n): t for n, t in state_dict.items()}
     if stage == 'stage1':
-        expected = {n for n in params if n.endswith(LIZARD_PARAMS)}
+        expected = {n for n in params if n.endswith(LIZARD_PARAMS + LOLCATS_PARAMS)}
     else:
         expected = {n for n in params if '.lora_' in n}
     not_loaded = sorted(n for n in expected & set(tensors)
