@@ -9,6 +9,8 @@
 # -> scripts/compare_stages.sh                                    # 3 models x 3 tasks
 # -> MODELS="stage1 stage2" TASKS=piqa scripts/compare_stages.sh   # a part of it (TASKS can also include mmlu, all questions)
 # -> TEMPERATURE=0.5 scripts/compare_stages.sh                    # logits divided by 0.5 (see scripts/temperature.sh)
+# -> MODELS=stage1 TASKS=layers scripts/compare_stages.sh          # no benchmark: only the checkpoint check and the
+#    per-layer table (Lizard gates or LoLCATs window share), in a few minutes
 # Paths below (OUT_DIR, checkpoints/, results/) are relative to the repo root; the script runs from there
 # Writes OUT_DIR (default results/stages/<time>): env.txt, summary.md, summary.json, training/ with the
 # training results CSVs from HF_REPO, and <model>/<task>/ with eval.log and the logs of compare_stages.py
@@ -113,19 +115,24 @@ for model in $MODELS; do
     *) echo "Unknown model $model (use teacher, stage1, stage2)"; exit 1 ;;
   esac
   for task in $TASKS; do
+    COMMAND=eval
     case $task in
       mmlu_subset) TASK_ARGS=(--task hendrycksTest --num_shots 5 --limit 5) ;;  # 285 questions, see docs/07
       mmlu)        TASK_ARGS=(--task hendrycksTest --num_shots 5) ;;
       piqa)        TASK_ARGS=(--task piqa --num_shots 0) ;;
       arc_easy)    TASK_ARGS=(--task arc_easy --num_shots 0) ;;
-      *) echo "Unknown task $task (use mmlu_subset, mmlu, piqa, arc_easy)"; exit 1 ;;
+      layers)      TASK_ARGS=(); COMMAND=layers ;;  # the harness stops after the model load
+      *) echo "Unknown task $task (use mmlu_subset, mmlu, piqa, arc_easy, layers)"; exit 1 ;;
     esac
+    if [ "$COMMAND" = layers ] && [ "$model" = teacher ]; then
+      echo "-> Skipping layers for the teacher: it has no Lizard or LoLCATs layers"; continue
+    fi
     RUN_DIR=$OUT_DIR/$model/$task
     mkdir -p "$RUN_DIR"
     echo "-> Evaluating $model on $task, logging to $RUN_DIR/eval.log"
     LM_EVALUATION_HARNESS_PATH=$LM_EVAL_DIR LM_EVAL_RESULTS_PATH=$OUT_DIR/results_lm_eval.csv \
-    PYTHONPATH=.${PYTHONPATH:+:$PYTHONPATH} python scripts/compare_stages.py eval "$RUN_DIR" \
-      "${MODEL_ARGS[@]}" "${TASK_ARGS[@]}" \
+    PYTHONPATH=.${PYTHONPATH:+:$PYTHONPATH} python scripts/compare_stages.py "$COMMAND" "$RUN_DIR" \
+      "${MODEL_ARGS[@]}" ${TASK_ARGS[@]+"${TASK_ARGS[@]}"} \
       --cache_dir "$CACHE_DIR" --no_cache --no_wandb --verbose 2>&1 | tee "$RUN_DIR/eval.log"
   done
 done

@@ -70,6 +70,24 @@ python scripts/layer_mse.py plot results/layer_mse/lizard_vs_lolcats_attention \
 
 Note: `fd128_lolcats.json` is Lizard with feature dimension 128 and the LoLCATs recipe. `lolcats_attention_fd128.json` is the LoLCATs attention of this experiment.
 
+**Per-layer table alone** (no benchmark, a few minutes). The task `layers` loads the model, checks the checkpoint and writes the table "LoLCATs parameters and window share" to `summary.md`. The harness stops before a benchmark.
+
+```bash
+MODELS=stage1 TASKS=layers MODEL_CONFIG=distill_llama3_1_1b_lk_smd_wtk64_fd64_w01 \
+  DISTILL_CKPT="$CKPT" OUT_DIR=results/stages/$(date +%Y%m%d-%H%M%S)-lolcats-control-layers scripts/compare_stages.sh
+```
+
+The table uses one 5-shot MMLU prompt of 2048 tokens. For each layer, it gives these values:
+
+| Column | Meaning |
+|---|---|
+| Window factor mean, min, max | σ(a_h) over the 32 heads, the weight of the window terms before the normalization. Start value 0.1. |
+| Window share, all queries | The share of the attention weight of a query on the keys inside its window, as the mean over the heads and the queries |
+| Far queries | The same share, only for the queries with keys outside the window (position 256 or later). There, the linear branch acts. |
+| Last query | The same share for the last token of the prompt |
+| φq, φk RMS / max | The size of the feature-map weights |
+| φq, φk change from identity | ‖W − I‖ / ‖I‖. The maps start as identity matrices (`--lk_zero_init`). |
+
 **Reference evaluations** (optional, minutes each). They complete the comparison table below.
 
 ```bash
@@ -98,7 +116,9 @@ MODELS=teacher TASKS="piqa arc_easy" scripts/compare_stages.sh
 
 `scripts/compare_stages.py`: the stage 1 checkpoint check accepted only Lizard parameter names. A LoLCATs checkpoint thus gave 0 expected keys, and the check had no effect. The new tuple `LOLCATS_PARAMS` adds the three LoLCATs names: `feature_map_q.mlp.layer`, `feature_map_k.mlp.layer` and `window_factors`. `layer_mse.py` uses the same check. The Lizard names do not change.
 
-Other parts of the scripts work without a change. `lizard_stats` finds no Lizard layer and writes an empty table. `layer_mse.py` reads `(y_pred, y_true)` from each layer, and the LoLCATs layer gives the same pair.
+Second change to `scripts/compare_stages.py` (2026-10-09): the per-layer table at the end of `summary.md` was empty for LoLCATs, because it read only Lizard parameters. `layer_stats` now also reads LoLCATs layers. It gives the window factors, the window share of the attention weight and the change of the feature maps. The share comes from the attention weights that the layer itself returns, so the output of the model does not change. `compare_stages.sh` has the new task `layers`, which writes only the checkpoint check and this table. For Lizard runs, `summary.md` does not change: the summary of R1b is the same as before.
+
+`layer_mse.py` works without a change. It reads `(y_pred, y_true)` from each layer, and the LoLCATs layer gives the same pair.
 
 ## Tests
 

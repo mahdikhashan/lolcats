@@ -7,8 +7,12 @@ Find where the gap starts: the teacher, Lizard after stage 1 and Lizard after st
    - <task>_write_out_info.json: per question, the log-likelihood of each choice, the right answer and acc
    - checkpoints.json: per checkpoint, its SHA-256, stored step and loss, dtypes, and whether every trainable
      parameter of the model holds the checkpoint value (sections 3 and 9)
-   - lizard.json: per layer, the gate values on one 5-shot MMLU prompt, alpha, the sink logits and the
-     feature-map weight sizes (section 6, and factors 0 and 1 of section 12)
+   - lizard.json: per layer, on one 5-shot MMLU prompt, the state of the trained attention parameters
+     (section 6, and factors 0 and 1 of section 12). Lizard layers: the gate values, alpha, the sink logits
+     and the feature-map weight sizes. LoLCATs layers: the window factors, the share of the attention
+     weight inside the window, and the change of the feature maps from the identity
+-> layers: only checkpoints.json and lizard.json of one model, without a benchmark (minutes)
+   PYTHONPATH=. python scripts/compare_stages.py layers OUT_DIR <eval_lm_harness.py model arguments>
 -> summary: compare the models in RUN_DIR/<model>/<task>/, read the training results CSVs in
    RUN_DIR/training/ (if any), and write RUN_DIR/summary.md and summary.json
    python scripts/compare_stages.py summary RUN_DIR
@@ -105,60 +109,126 @@ def check_checkpoint(model, path, stage):
     }
 
 
-def lizard_stats(model, tokenizer):
-    """
-    Per layer: gate values on one 5-shot MMLU prompt, and the trained Lizard parameters
-    -> At initialization, W_gamma = 0 (so gamma = 0.5), alpha = 1 and the feature-map weights have RMS 0.02
-    """
+def gate_prompt_ids(model, tokenizer):
+    """Token ids of one 5-shot prompt of GATE_TASK, as the harness feeds them to these models"""
     from lm_eval.tasks import get_task_dict
     task = get_task_dict([GATE_TASK])[GATE_TASK]
     doc = next(iter(task.test_docs()))
     prompt = task.fewshot_context(doc=doc, num_fewshot=5, rnd=random.Random(42))
     # As the harness does for these models: no beginning-of-text token, keep the end of long prompts
     ids = tokenizer(prompt, add_special_tokens=False).input_ids[-GATE_MAX_TOKENS:]
-    ids = torch.tensor([ids], device=next(model.parameters()).device)
+    return torch.tensor([ids], device=next(model.parameters()).device)
 
-    gammas = {}
+
+def window_share_probe(quadratic_attention, shares, layer):
+    """
+    Wrap the hybrid attention of a LoLCATs layer: for each query, the share of its attention weight on the
+    keys inside its window (mean over the heads), and whether it has keys outside the window
+    """
+    get_masks = sys.modules[quadratic_attention.__module__].get_masks
+
+    def probe(q, k, *args, window_size, **kwargs):
+        y, a = quadratic_attention(q, k, *args, window_size=window_size, **kwargs)
+        mask_window, mask_linear = get_masks(window_size, q.shape[-2], k.shape[-2], q.device)
+        shares[layer] = ((a.float() * mask_window).sum(-1)[0].mean(0).double().cpu(),
+                         (mask_linear[0, 0].sum(-1) > 0).cpu())
+        return y, a
+    return probe
+
+
+def layer_stats(model, tokenizer, ids=None):
+    """
+    Per layer, on one 5-shot prompt (ids, default: gate_prompt_ids): the state of the trained attention
+    -> Lizard layers: the gate values, alpha, the sink logits and the feature-map weight sizes.
+       At initialization, W_gamma = 0 (so gamma = 0.5), alpha = 1 and the feature-map weights have RMS 0.02
+    -> LoLCATs layers (lolcats_llama_window_tk): the window factor sigmoid(a_h) of each head, the share of the
+       attention weight inside the window, and the change of the feature maps from the identity (their start
+       value with --lk_zero_init). At initialization, the window factor is 0.1
+    """
+    ids = gate_prompt_ids(model, tokenizer) if ids is None else ids
+
+    gammas, shares, probed = {}, {}, []
     hooks = [module.register_forward_hook(
                  lambda m, i, o, layer=layer_index(name):
                  gammas.__setitem__(layer, torch.sigmoid(o.float())[0, :, 0].double().cpu()))
              for name, module in model.named_modules() if name.endswith('W_gamma')]
-    with torch.no_grad():
-        model(input_ids=ids, use_cache=False)
-    for hook in hooks:
-        hook.remove()
+    for name, attn in model.named_modules():
+        quadratic_attention = getattr(attn, 'quadratic_attention', None)  # LoLCATs window attention
+        source = sys.modules.get(getattr(quadratic_attention, '__module__', None))
+        if name.endswith('self_attn') and hasattr(attn, 'window_factors') and hasattr(source, 'get_masks'):
+            probed.append((attn, attn.quadratic_attention))
+            attn.quadratic_attention = window_share_probe(attn.quadratic_attention, shares, layer_index(name))
+    try:
+        with torch.no_grad():
+            model(input_ids=ids, use_cache=False)
+    finally:
+        for hook in hooks:
+            hook.remove()
+        for attn, quadratic_attention in probed:
+            attn.quadratic_attention = quadratic_attention
 
     layers = []
     for name, attn in model.named_modules():
-        if not (name.endswith('self_attn') and hasattr(attn, 'alpha_blend')):
+        if not name.endswith('self_attn'):
             continue
-        gamma = gammas[layer_index(name)]
-        phi_q, phi_k = attn.phi_q.weight.float(), attn.phi_k.weight.float()
-        layers.append({
-            'layer': layer_index(name),
-            'gamma_mean': gamma.mean().item(),
-            'gamma_std': gamma.std().item(),
-            'gamma_min': gamma.min().item(),
-            'gamma_max': gamma.max().item(),
-            'gamma_below_1e-3': (gamma < 1e-3).double().mean().item(),
-            'gamma_above_0.999': (gamma > 0.999).double().mean().item(),
-            # Weight the gated branch keeps on a token w positions before the last token
-            'kept_after': {str(w): gamma[-w:].log().sum().exp().item() if len(gamma) >= w else None
-                           for w in KEPT_AFTER},
-            'alpha': attn.alpha_blend.float().mean().item(),  # the mean over the heads for lizard_v2 alpha_per_head
-            'alpha_per_head': attn.alpha_blend.float().tolist() if attn.alpha_blend.dim() else None,
-            'sink_logits': attn.meta_tokens.float().tolist(),
-            'W_gamma_norm': attn.W_gamma.weight.float().norm().item(),
-            'phi_q_rms': phi_q.pow(2).mean().sqrt().item(),
-            'phi_q_max_abs': phi_q.abs().max().item(),
-            'phi_k_rms': phi_k.pow(2).mean().sqrt().item(),
-            'phi_k_max_abs': phi_k.abs().max().item(),
-        })
+        if hasattr(attn, 'alpha_blend'):  # Lizard
+            gamma = gammas[layer_index(name)]
+            phi_q, phi_k = attn.phi_q.weight.float(), attn.phi_k.weight.float()
+            layers.append({
+                'type': 'lizard',
+                'layer': layer_index(name),
+                'gamma_mean': gamma.mean().item(),
+                'gamma_std': gamma.std().item(),
+                'gamma_min': gamma.min().item(),
+                'gamma_max': gamma.max().item(),
+                'gamma_below_1e-3': (gamma < 1e-3).double().mean().item(),
+                'gamma_above_0.999': (gamma > 0.999).double().mean().item(),
+                # Weight the gated branch keeps on a token w positions before the last token
+                'kept_after': {str(w): gamma[-w:].log().sum().exp().item() if len(gamma) >= w else None
+                               for w in KEPT_AFTER},
+                'alpha': attn.alpha_blend.float().mean().item(),  # the mean over the heads for lizard_v2 alpha_per_head
+                'alpha_per_head': attn.alpha_blend.float().tolist() if attn.alpha_blend.dim() else None,
+                'sink_logits': attn.meta_tokens.float().tolist(),
+                'W_gamma_norm': attn.W_gamma.weight.float().norm().item(),
+                'phi_q_rms': phi_q.pow(2).mean().sqrt().item(),
+                'phi_q_max_abs': phi_q.abs().max().item(),
+                'phi_k_rms': phi_k.pow(2).mean().sqrt().item(),
+                'phi_k_max_abs': phi_k.abs().max().item(),
+            })
+        elif hasattr(attn, 'window_factors'):  # LoLCATs
+            factor = torch.sigmoid(attn.window_factors.float()).flatten()
+            share, far = shares.get(layer_index(name), (None, None))
+            stats = {
+                'type': 'lolcats',
+                'layer': layer_index(name),
+                'window_size': attn.window_size,
+                'window_factor_mean': factor.mean().item(),
+                'window_factor_min': factor.min().item(),
+                'window_factor_max': factor.max().item(),
+                'window_factor_per_head': factor.tolist(),
+                'window_share_mean': share.mean().item() if share is not None else None,
+                'window_share_far': share[far].mean().item() if share is not None and far.any() else None,
+                'window_share_last': share[-1].item() if share is not None else None,
+                'far_queries': int(far.sum()) if far is not None else None,
+            }
+            for side in ('q', 'k'):
+                weight = getattr(getattr(attn, f'feature_map_{side}').mlp, 'layer', None)
+                if isinstance(weight, torch.Tensor):
+                    weight = weight.float()
+                    identity = torch.eye(*weight.shape[-2:], device=weight.device).expand_as(weight)
+                    stats[f'phi_{side}_rms'] = weight.pow(2).mean().sqrt().item()
+                    stats[f'phi_{side}_max_abs'] = weight.abs().max().item()
+                    stats[f'phi_{side}_change_from_identity'] = ((weight - identity).norm() / identity.norm()).item()
+            layers.append(stats)
     return {'gate_task': GATE_TASK, 'prompt_tokens': ids.shape[1],
             'layers': sorted(layers, key=lambda l: l['layer'])}
 
 
-def run_eval(out_dir, harness_args):
+class LayersDone(Exception):
+    """Ends the harness script after the model load, for the layers command"""
+
+
+def run_eval(out_dir, harness_args, layers_only=False):
     sys.path.append(os.environ.get('LM_EVALUATION_HARNESS_PATH', '/workspace/lm-evaluation-harness'))
     from lm_eval import evaluator
     import src.model.load_model_for_eval as loader
@@ -201,13 +271,18 @@ def run_eval(out_dir, harness_args):
                       f'{len(c["missing_keys"])} missing, {len(c["unexpected_keys"])} unexpected, '
                       f'{len(c["values_not_loaded"])} not loaded, step {c["step"]}, losses {c["losses"]}')
         dump(checkpoints, join(out_dir, 'checkpoints.json'))
-        dump(lizard_stats(model, tokenizer), join(out_dir, 'lizard.json'))
+        dump(layer_stats(model, tokenizer), join(out_dir, 'lizard.json'))
+        if layers_only:
+            raise LayersDone
         return lm, model_config, tokenizer
 
     evaluator.simple_evaluate = logged_evaluate
     loader.load_model_from_checkpoint = logged_load
     sys.argv = ['lm_eval_harness/eval_lm_harness.py'] + harness_args
-    runpy.run_path('lm_eval_harness/eval_lm_harness.py', run_name='__main__')
+    try:
+        runpy.run_path('lm_eval_harness/eval_lm_harness.py', run_name='__main__')
+    except LayersDone:
+        print(f'-> Wrote checkpoints.json and lizard.json to {out_dir}, without a benchmark')
 
 
 # --- summary ---
@@ -322,22 +397,27 @@ def summarize(run_dir):
             for m in MODELS if isdir(join(run_dir, m))}
     models = [m for m in MODELS if runs.get(m)]
     tasks = [t for t in TASKS if any(t in runs[m] for m in models)]
+    # Runs of the layers command: only checkpoints.json and lizard.json, in <model>/layers/
+    layer_runs = {m: {name[:-len('.json')]: load(join(run_dir, m, 'layers', name))
+                      for name in ('checkpoints.json', 'lizard.json') if isfile(join(run_dir, m, 'layers', name))}
+                  for m in MODELS if isdir(join(run_dir, m, 'layers'))}
     out = ['# Stage comparison: where the gap starts', '',
            f'This run tests section 10 of `docs/11-gap-analysis.md`. Run directory: `{run_dir}`.', '']
     if isfile(join(run_dir, 'env.txt')):
         out += ['```', open(join(run_dir, 'env.txt')).read().strip(), '```', '']
 
     # Scores
-    out += ['## Scores', '', 'Accuracy in %, ± the binomial SE. n is the number of questions.', '',
-            '| Task | ' + ' | '.join(MODELS[m] for m in models) + ' |', '|---' * (len(models) + 1) + '|']
-    for t in tasks:
-        cell = lambda r, k: f"{fmt(r[k])} ± {fmt(r[k + '_stderr'])} (n = {r['n']})" if r.get(k) is not None else '–'
-        out.append(f'| {TASKS[t]} | ' + ' | '.join(cell(runs[m][t], 'acc') if t in runs[m] else '–'
-                                                    for m in models) + ' |')
-        if any(t in runs[m] and runs[m][t].get('acc_norm') is not None for m in models):
-            out.append(f'| {TASKS[t]}, normalized | ' + ' | '.join(
-                cell(runs[m][t], 'acc_norm') if t in runs[m] else '–' for m in models) + ' |')
-    out.append('')
+    if models:
+        out += ['## Scores', '', 'Accuracy in %, ± the binomial SE. n is the number of questions.', '',
+                '| Task | ' + ' | '.join(MODELS[m] for m in models) + ' |', '|---' * (len(models) + 1) + '|']
+        for t in tasks:
+            cell = lambda r, k: f"{fmt(r[k])} ± {fmt(r[k + '_stderr'])} (n = {r['n']})" if r.get(k) is not None else '–'
+            out.append(f'| {TASKS[t]} | ' + ' | '.join(cell(runs[m][t], 'acc') if t in runs[m] else '–'
+                                                        for m in models) + ' |')
+            if any(t in runs[m] and runs[m][t].get('acc_norm') is not None for m in models):
+                out.append(f'| {TASKS[t]}, normalized | ' + ' | '.join(
+                    cell(runs[m][t], 'acc_norm') if t in runs[m] else '–' for m in models) + ' |')
+        out.append('')
 
     # Where the drop happens
     comparisons = {}
@@ -404,6 +484,7 @@ def summarize(run_dir):
 
     # Checkpoints (sections 3 and 9)
     checks = {f'{m}/{t}': runs[m][t]['checkpoints'] for m in models for t in runs[m] if 'checkpoints' in runs[m][t]}
+    checks.update({f'{m}/layers': r['checkpoints'] for m, r in layer_runs.items() if 'checkpoints' in r})
     if checks:
         files = {}
         for c in checks.values():
@@ -444,30 +525,54 @@ def summarize(run_dir):
                        f"{point(t['best'])} | {point(t['last'])} | {stored.get(stage, '–')} |")
         out.append('')
 
-    # Lizard parameters and gates (section 6, factors 0 and 1 of section 12)
+    # Attention parameters: Lizard gates (section 6, factors 0 and 1 of section 12), LoLCATs window share
     stats = {}
-    for m in models:
-        found = [runs[m][t]['lizard'] for t in runs[m] if 'lizard' in runs[m][t]]
+    for m in MODELS:
+        found = [runs[m][t]['lizard'] for t in runs.get(m, {}) if 'lizard' in runs[m][t]]
+        found += [layer_runs[m]['lizard']] if 'lizard' in layer_runs.get(m, {}) else []
         if not found:
             continue
         s = stats[m] = found[0]
-        out += [f"## Lizard parameters and gates: {MODELS[m]}", '',
-                f"Gate values on one 5-shot prompt of `{s['gate_task']}` ({s['prompt_tokens']} tokens). "
-                'Kept after w: the weight that the gated branch keeps on a token w positions before the last token. '
-                'Initial values: gamma = 0.5, alpha = 1, feature-map weight RMS 0.02.', '',
-                '| Layer | Gamma mean | Std | Min | Max | < 1e-3 | > 0.999 | '
-                + ' | '.join(f'Kept after {w}' for w in KEPT_AFTER)
-                + ' | Alpha | Sink logits | φq RMS / max | φk RMS / max | ‖W_γ‖ |',
-                '|---' * (12 + len(KEPT_AFTER)) + '|']
-        for l in s['layers']:
-            kept = [l['kept_after'][str(w)] for w in KEPT_AFTER]
-            out.append(f"| {l['layer']} | {l['gamma_mean']:.3f} | {l['gamma_std']:.3f} | {l['gamma_min']:.3f} | "
-                       f"{l['gamma_max']:.3f} | {fmt(l['gamma_below_1e-3'])}% | {fmt(l['gamma_above_0.999'])}% | "
-                       + ' | '.join('–' if k is None else f'{k:.1e}' for k in kept)
-                       + f" | {l['alpha']:.3f} | {', '.join(f'{x:.2f}' for x in l['sink_logits'])} | "
-                       f"{l['phi_q_rms']:.3f} / {l['phi_q_max_abs']:.2f} | {l['phi_k_rms']:.3f} / "
-                       f"{l['phi_k_max_abs']:.2f} | {l['W_gamma_norm']:.2f} |")
-        out.append('')
+        lizard = [l for l in s['layers'] if l.get('type', 'lizard') == 'lizard']
+        lolcats = [l for l in s['layers'] if l.get('type') == 'lolcats']
+        if lizard:
+            out += [f"## Lizard parameters and gates: {MODELS[m]}", '',
+                    f"Gate values on one 5-shot prompt of `{s['gate_task']}` ({s['prompt_tokens']} tokens). "
+                    'Kept after w: the weight that the gated branch keeps on a token w positions before the last '
+                    'token. Initial values: gamma = 0.5, alpha = 1, feature-map weight RMS 0.02.', '',
+                    '| Layer | Gamma mean | Std | Min | Max | < 1e-3 | > 0.999 | '
+                    + ' | '.join(f'Kept after {w}' for w in KEPT_AFTER)
+                    + ' | Alpha | Sink logits | φq RMS / max | φk RMS / max | ‖W_γ‖ |',
+                    '|---' * (12 + len(KEPT_AFTER)) + '|']
+            for l in lizard:
+                kept = [l['kept_after'][str(w)] for w in KEPT_AFTER]
+                out.append(f"| {l['layer']} | {l['gamma_mean']:.3f} | {l['gamma_std']:.3f} | {l['gamma_min']:.3f} | "
+                           f"{l['gamma_max']:.3f} | {fmt(l['gamma_below_1e-3'])}% | {fmt(l['gamma_above_0.999'])}% | "
+                           + ' | '.join('–' if k is None else f'{k:.1e}' for k in kept)
+                           + f" | {l['alpha']:.3f} | {', '.join(f'{x:.2f}' for x in l['sink_logits'])} | "
+                           f"{l['phi_q_rms']:.3f} / {l['phi_q_max_abs']:.2f} | {l['phi_k_rms']:.3f} / "
+                           f"{l['phi_k_max_abs']:.2f} | {l['W_gamma_norm']:.2f} |")
+            out.append('')
+        if lolcats:
+            num = lambda x, d=3: '–' if x is None else f'{x:.{d}f}'
+            out += [f"## LoLCATs parameters and window share: {MODELS[m]}", '',
+                    f"Window share on one 5-shot prompt of `{s['gate_task']}` ({s['prompt_tokens']} tokens): the share "
+                    'of the attention weight of a query on the keys inside its window, as the mean over the heads. '
+                    'Far queries: the queries with keys outside the window, where the linear branch acts. Window '
+                    'factor: sigmoid(a_h) of each head, the weight of the window terms before the normalization. '
+                    'Change from identity: ‖W − I‖ / ‖I‖ of the feature-map weights. Initial values: window factor '
+                    '0.1, feature maps identity (--lk_zero_init).', '',
+                    '| Layer | Window factor mean | Min | Max | Window share, all queries | Far queries | '
+                    'Last query | φq RMS / max | φk RMS / max | φq change from identity | φk change from identity |',
+                    '|---' * 11 + '|']
+            for l in lolcats:
+                rms = lambda side: (f"{l[f'phi_{side}_rms']:.3f} / {l[f'phi_{side}_max_abs']:.2f}"
+                                    if f'phi_{side}_rms' in l else '–')
+                out.append(f"| {l['layer']} | {l['window_factor_mean']:.3f} | {l['window_factor_min']:.3f} | "
+                           f"{l['window_factor_max']:.3f} | {num(l['window_share_mean'])} | "
+                           f"{num(l['window_share_far'])} | {num(l['window_share_last'])} | {rms('q')} | {rms('k')} | "
+                           f"{num(l.get('phi_q_change_from_identity'))} | {num(l.get('phi_k_change_from_identity'))} |")
+            out.append('')
 
     with open(join(run_dir, 'summary.md'), 'w') as f:
         f.write('\n'.join(out))
@@ -519,6 +624,8 @@ if __name__ == '__main__':
     command = sys.argv[1] if len(sys.argv) > 1 else None
     if command == 'eval' and len(sys.argv) > 2:
         run_eval(sys.argv[2], sys.argv[3:])
+    elif command == 'layers' and len(sys.argv) > 2:
+        run_eval(sys.argv[2], sys.argv[3:], layers_only=True)
     elif command == 'summary' and len(sys.argv) == 3:
         summarize(sys.argv[2])
     elif command == 'temperatures' and len(sys.argv) == 3:
