@@ -1,6 +1,6 @@
 # Experiment: LoLCATs attention as a control in stage 1
 
-**Status:** Prepared, not run yet. A CPU test of the training command passes ("Tests").
+**Status:** Run 1 finished on 2026-10-09. Stage 1 validation loss 0.4442 (Lizard: 3.2549), PIQA 73.5 (Lizard: 57.6), ARC-Easy 62.8, MMLU subset 26.0. On PIQA and ARC-Easy, this model computes almost exactly the teacher attention ("Results", finding 2).
 
 ## Question
 
@@ -83,10 +83,10 @@ MODELS=teacher TASKS="piqa arc_easy" scripts/compare_stages.sh
 
 | Measure | Lizard, Run 1 stage 1 | LoLCATs attention | Limit for a clear difference |
 |---|---|---|---|
-| Stage 1 validation loss | 3.2549 | – | The same loss and data. No SE. |
-| PIQA | 57.6 | – | Approximately 3.2 points (2 unpaired SE) |
-| ARC-Easy | Not measured (reference evaluation above) | – | Approximately 2.8 points |
-| MMLU subset | 22.5, with "A" for 95.4% | – | Approximately 7 points. This subset cannot separate the two models. |
+| Stage 1 validation loss | 3.2549 | 0.4442 | The same loss and data. No SE. |
+| PIQA | 57.6 | 73.5 | Approximately 3.2 points (2 unpaired SE) |
+| ARC-Easy | Not measured (reference evaluation above) | 62.8 | Approximately 2.8 points |
+| MMLU subset | 22.5, with "A" for 95.4% | 26.0, with "A" for 19.3% | Approximately 7 points. This subset cannot separate the two models. |
 
 | Result | Meaning | Next step |
 |---|---|---|
@@ -119,4 +119,53 @@ CPU, 2026-10-09. The test ran the exact command of `make lolcats ARGS="--no_wand
 
 ## Results
 
-Not run yet.
+### Run 1 (2026-10-09)
+
+- **Training**: stage 1 on HF Jobs (H200) with the command above. These notes do not record the job ID or the time.
+- **Evaluation**: `scripts/compare_stages.sh` with `MODELS=stage1`, on `student06`, A10, on 2026-10-09 at 17:50 UTC. Run directory: `results/stages/20261009-194950-lolcats-control`. Code: lolcats `8bd7614`, harness `b281b09`, torch 2.5.1, transformers 4.43.1.
+
+| Checkpoint | SHA-256 | Size | Parameters | Dtype | Stored step | Stored loss |
+|---|---|---|---|---|---|---|
+| LoLCATs attention, stage 1 | `200d27aa5393c1465c3f203639ad24ea2a791c0a54ee1f2a295776bcc0ee3c08` | 16,808,818 B | 8,389,120 | bfloat16 (48 tensors) | 1100 | **0.4442** |
+
+In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with their values. The stored step is the last evaluation, as in all earlier runs.
+
+**Scores** (z values with unpaired SEs):
+
+| Measure | Lizard, Run 1 stage 1 | LoLCATs attention, stage 1 | Difference |
+|---|---|---|---|
+| Stage 1 validation loss | 3.2549 | **0.4442** | −86% (7.3× lower) |
+| PIQA | 57.6 ± 1.2 | **73.5 ± 1.0** | +15.9 points, z ≈ 10 |
+| ARC-Easy | Not measured | **62.8 ± 1.0** (normalized 58.0) | – |
+| MMLU subset | 22.5 ± 2.5 | 26.0 ± 2.6 | +3.5 points, z ≈ 1.0 |
+| "A" / "B" / "C" / "D" on MMLU | 95.4% / 2.8% / 1.8% / 0.0% | 19.3% / 14.7% / 42.8% / 23.2% | – |
+| Letter mass, confidence, entropy | 0.018, 0.586, 1.550 bits ([temperature](temperature.md)) | 0.962, 0.450, 1.746 bits | – |
+
+**Other reference values:**
+
+| Model | PIQA | ARC-Easy |
+|---|---|---|
+| LoLCATs attention, stage 1 (this run) | 73.5 | 62.8 |
+| Lizard model after stage 2 (Run 2, [document 7](../07-results.md)) | 67.95 | 54.8 |
+| Lizard, best stage 1 on ARC-Easy (config 1, [second round](second-round.md)) | 57.3 | 36.5 |
+| Teacher, Lizard paper (another harness) | 74.1 | 65.4 |
+| Lizard 1B, Lizard paper | 74.8 | 65.6 |
+| LoLCATs 1B after stage 2, Liger paper | 74.1 | 63.7 |
+
+**Finding 1: the pipeline can train a much better model than the Lizard runs**. LoLCATs after stage 1 is 15.9 points above Lizard after stage 1 on PIQA. Without stage 2, it is also above the final Lizard model on PIQA (+5.5, z ≈ 3.8) and on ARC-Easy (+8.0, z ≈ 5.6). The pipeline, the data, the recipe and the harness are the same. Thus the gap on these tasks comes from the Lizard layer. This is the first row of "How to compare".
+
+**Finding 2: on PIQA and ARC-Easy, this model computes almost exactly the teacher attention**. The terraced window gives exact softmax attention with RoPE over up to 255 tokens. The linear branch acts only on tokens farther back. 95% of the PIQA and ARC-Easy prompts have fewer than approximately 90 tokens ([document 13](../13-lizard-attention-v2.md), an estimate). For such a prompt, the window factor cancels, and the output is the softmax attention of the teacher, up to rounding. Thus these two scores test the window, not the linear attention. They are probably near the teacher scores in this harness. X0 of [gap analysis 2](../12-gap-analysis-2.md) has not run yet and can check this.
+
+**Finding 3: LoLCATs also approximates long sequences much better**. The stage 1 loss uses sequences of 2048 tokens, so the linear branch acts on most positions. The loss is 7.3× lower than for Lizard. Two differences explain a part of this: the larger window (128–255 tokens against 128) and the feature maps for each head (28× more parameters). This run cannot separate the causes.
+
+**Finding 4: MMLU stays near chance, but without the "A" collapse**. The 5-shot prompts are long, so the linear branch acts. The accuracy is 26.0, against 33.7 for the teacher (z ≈ −2.0). This agrees with the Liger paper (LoLCATs 1B: 23.1 after stage 2). But the model puts 96.2% of its probability on the four letters, against 1.8% for Lizard stage 1. Thus the LoLCATs model keeps the answer format, and Lizard stage 1 does not ("Stuck on A", [document 19](../19-next-steps-from-literature.md)).
+
+**Finding 5: the most probable cause of the short-context gap of Lizard**. On a short prompt, Lizard never computes the teacher attention. Its window has no RoPE, and its gated branch adds weight on every token, also inside the window ([document 15](../15-attention-math-side-by-side.md), claims B, C and F). LoLCATs computes the teacher attention on a short prompt, because its window has RoPE and its linear branch excludes the window tokens.
+
+### Next steps
+
+1. X0: the teacher on PIQA and ARC-Easy in this harness (minutes). It checks finding 2.
+2. Lizard with `window_rope` in the setup of Run 1 (step B5 of [document 19](../19-next-steps-from-literature.md)). This is the most direct test of finding 5. It needs only a new model config: the Run 1 config with `attention_type: lolcats_llama_lizard_v2` and `window_rope: true`.
+3. A Lizard option that keeps the gated branch out of the window, as in LoLCATs (claim A of [document 15](../15-attention-math-side-by-side.md)). It needs a code change.
+4. Stage 2 of this LoLCATs model, against the target of the Liger paper (MMLU 23.1).
+5. ARC-Easy of Lizard Run 1 stage 1 (the reference evaluation above), to fill the empty cell.
