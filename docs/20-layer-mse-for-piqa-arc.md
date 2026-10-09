@@ -100,7 +100,7 @@ Done already:
 | # | Change | Part | Target | Code | Cost |
 |---|---|---|---|---|---|
 | 1 | X1 and X2 | – | Select the part to change | Small | A10, approximately 1 hour, free |
-| 2 | `window_rope` in the setup of Run 1 | Window | Positions 0–127, thus PIQA and ARC-Easy. Layer 0. | None, the option exists ([document 13](13-lizard-attention-v2.md)) | One stage 1: approximately 50 minutes and $5 on the H200 (bf16). Or a few layers on the A10 ([faster feedback loop](experiments/fast-feedback-loop.md), step 4). |
+| 2 | `window_rope` in the setup of Run 1 ([experiment](experiments/window-rope.md)) | Window | Positions 0–127, thus PIQA and ARC-Easy. Layer 0. | None, the option exists ([document 13](13-lizard-attention-v2.md)). The model config exists. | One stage 1: approximately 50 minutes and $5 on the H200 (bf16). Or a few layers on the A10 ([faster feedback loop](experiments/fast-feedback-loop.md), step 4). |
 | 3 | The gated branch only for keys outside the window | Gated branch | Short prompts: no double weight inside the window | A new option. Claim A of [document 15](15-attention-math-side-by-side.md) gives the form. | As step 2 |
 | 4 | A larger weight for the loss of positions 0–127, or a part of the data in shorter chunks | Loss | The case of PIQA and ARC-Easy | A new option in the trainer | As step 2 |
 | 5 | `gate_per_head` | Gated branch | Layer 15 (34% of the MSE difference) | None, the option exists | As step 2 |
