@@ -1,6 +1,6 @@
 # Experiment (XAI): branch decomposition
 
-**Status:** The script `scripts/branch_fit.py` exists and passed CPU tests on 2026-10-09. It has not run on the real checkpoints yet.
+**Status:** Run 1 finished on 2026-10-09: the 8 Lizard stage 1 checkpoints. Inside the window, the window branch without RoPE explains only approximately 60% of the teacher output. A window with RoPE would halve the error of the current branches, and 4–7 times in layers 0 and 15. The gated branch carries the long-range part, but with too much weight. This supports `window_rope` as the next change.
 
 ## Question
 
@@ -103,7 +103,84 @@ The values of the tiny models do not predict the values at 1B.
 
 ## Results
 
-Not run yet.
+### Run 1: the 8 Lizard stage 1 checkpoints (2026-10-09)
+
+- **Commands:** the loop of "How to run", then `plot` for the buckets 0–127, 512–2047 and all.
+- **Machine and code:** `student06`, lolcats `e7a86dc`. Data: all 16 validation batches (32,768 tokens).
+- **Checks:**
+  1. All expected keys loaded, 0 missing, 0 unexpected.
+  2. The branches reproduce the checkpoint output: 0 for float32 v1, 1.7e-3 for bf16 (the bf16 rounding of the output), and 7.0e-7 to 7.9e-7 for v2.
+  3. WR at positions 0–127: the mean over the layers is 1.3e-5 (bf16) or 1.7e-17 (float32). The largest value of one head is 1.0e-4.
+  4. In every layer, bucket and head, the error of `trained` is at least the error of the G+W fit.
+- **Files in [`xai-branch-fit/`](xai-branch-fit/):** the 8 JSON files, and the heatmaps and tables for the buckets 0–127, 512–2047 and all.
+
+#### Means over the layers
+
+Remaining error / ‖y‖². WR is 0 at positions 0–127 in every checkpoint (check 3).
+
+| Checkpoint | W, 0–127 | G+W, 0–127 | trained, 0–127 | WR, 512–2047 | G+WR, 512–2047 | G+W, all | G+WR, all | trained, all |
+|---|---|---|---|---|---|---|---|---|
+| fd32, LoLCATs recipe, bf16 | 0.404 | 0.318 | 0.488 | 0.352 | 0.151 | 0.339 | 0.166 | 0.379 |
+| fd128, LoLCATs recipe, bf16 | 0.403 | 0.314 | 0.463 | 0.352 | 0.142 | 0.328 | 0.158 | 0.363 |
+| fd32, paper recipe, bf16 | 0.394 | 0.316 | 0.629 | 0.352 | 0.206 | 0.402 | 0.214 | 1.262 |
+| fd32, paper recipe, float32 | 0.394 | 0.318 | 0.514 | 0.352 | 0.190 | 0.388 | 0.201 | 0.674 |
+| Second round, config 1 | 0.396 | 0.320 | 0.499 | 0.352 | 0.169 | 0.369 | 0.184 | 0.495 |
+| Second round, config 2 (clipping) | 0.398 | 0.318 | 0.491 | 0.352 | 0.155 | 0.351 | 0.171 | 0.402 |
+| v2, C1: alpha per head | 0.396 | 0.320 | 0.486 | 0.352 | 0.171 | 0.370 | 0.186 | 0.479 |
+| v2, R1b: per-head, hybrid | 0.458 | 0.295 | 0.351 | 0.352 | 0.162 | 0.280 | 0.175 | 0.308 |
+
+#### Heatmaps
+
+![Remaining error of each candidate set, positions 0–127](xai-branch-fit/branch_fit_0-127.png)
+
+![Remaining error of each candidate set, positions 512–2047](xai-branch-fit/branch_fit_512-2047.png)
+
+![Remaining error of each candidate set, all positions](xai-branch-fit/branch_fit_all.png)
+
+#### Findings
+
+**Finding 1: the oracle check passes**. At positions 0–127, WR gives 1.3e-5 (bf16) or 1.7e-17 (float32). Thus the window mask and the RoPE of WR are correct.
+
+**Finding 2: the window without RoPE explains only approximately 60% of the teacher output inside the window**. At positions 0–127, W keeps an error of 0.394–0.458, even with the best weight for each head. With RoPE, the error is 0 (finding 1). Thus most of the error at short positions comes from the window branch itself: the missing RoPE and the sinks. For fd128, the largest values are in layers 1 (0.675), 3, 2, 4, 15 and 0 (0.491). The middle layers 7 and 8 have 0.209.
+
+**Finding 3: inside the window, the gated branch helps only a little**. At positions 0–127, G+W has 0.78–0.81 × the error of W for the v1 checkpoints and C1, and 0.64 × for R1b.
+
+**Finding 4: outside the window, the gated branch gives a large part of the output**. WR alone keeps an error of 0.352 at positions 512–2047, because it has no keys outside the window. G+WR has 0.40–0.58 × this error, and 0.52–0.64 × at positions 128–511. In layers 1 and 2, WR alone keeps 0.67–0.69 at positions 512–2047, and G+WR keeps 0.14–0.31. Thus the gated branch carries the long-range part, and it is not the main limit.
+
+**Finding 5: a window with RoPE halves the error of the current branches**. Over all positions, G+WR has 1.9–2.1 × less error than G+W for the v1 checkpoints and C1, and 1.6 × less for R1b. In layers 0 and 15, the factor at positions 512–2047 is 4.4–6.9 in all checkpoints except R1b. For R1b, it is 2.4 and 1.8.
+
+**Finding 6: heads 14 and 23 of layer 15 are window heads**. With WR alone, their error over all positions is 0.017 and 0.134–0.136. The trained output has 0.57–0.62 and 0.90–0.94 in the 7 checkpoints other than R1b. Thus the largest single source of the stage 1 loss ([XAI: layer-wise MSE](xai-layer-wise-mse.md), finding 5) is the window without RoPE. R1b reached 0.14 and 0.23 for these heads through its short gate ([document 13](../13-lizard-attention-v2.md), finding 3).
+
+**Finding 7: the gated branch has too much weight**. In the G+W fit over all positions, the median weight of G is 0.55–0.81 for the v1 checkpoints and C1, not 1. The medians of the single layers are 0.36–0.92. For R1b, with the shared denominator of `hybrid`, it is 0.98. This agrees with claim C of [document 15](../15-attention-math-side-by-side.md): the total weight of a Lizard row is 1 + αρ, more than 1.
+
+**Finding 8: the mixing gap depends on the recipe**. Over all positions, the trained output has more error than the G+W fit:
+
+- **+10% to +14%:** the LoLCATs recipe (fd32, fd128), config 2 and R1b.
+- **+29% to +34%:** config 1 and C1.
+- **+74% and +214%:** the recipe of the paper, in float32 and bf16.
+
+For the v1 checkpoints and C1, the best weight of W also shows how well α trained. The median difference between the best weight and α is:
+
+- 0.016–0.018 for the LoLCATs recipe and config 2,
+- 0.11–0.12 for config 1 and C1,
+- 0.26 and 0.53 for the recipe of the paper (float32, bf16).
+
+In the bf16 run of the recipe of the paper, α stayed at 1.0 ([paper LR](paper-lr.md)). But the best weights of the layers are 0.14–0.68 (medians over the heads).
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. WR at positions 0–127 is only rounding | 1.3e-5 (bf16), 1.7e-17 (float32) (finding 1) | Yes |
+| 2. W has a much larger error than WR at positions 0–127, most of all in layers 0–3 | 0.394–0.458 against approximately 0. For fd128, the largest values are in layers 0–4 and 15 (finding 2). | Yes |
+| 3. A clear mixing gap in some layers, smaller for C1 | Clear for most checkpoints. C1 has +29%, config 1 +34%, so only a little smaller (finding 8). | Partly |
+
+#### Decision
+
+- **Window (rule 1):** W keeps 0.39–0.46 at positions 0–127, and WR keeps approximately 0. Thus the missing RoPE (and the sinks) is the cause of the error at short positions. `window_rope` comes first, as step 2 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5, says.
+- **Gated branch (rule 2):** the gated branch lowers the error of WR by 36–60% at positions 128–2047. Thus it is not the main limit, and X3 can wait.
+- **Mixing gap (rule 3):** the gated branch should have less weight (finding 7). `gla_norm: hybrid` corrects this weight (R1b: 0.98). Thus a second run can combine `window_rope` with `hybrid`, after a run with `window_rope` alone.
+- **Expected effect of `window_rope`:** layers 0 and 15 probably improve most. Heads 14 and 23 of layer 15 probably improve much (findings 5 and 6). The gated branch then trains together with a window with RoPE, so the result can differ from G+WR. X1 found that a small decrease of the MSE does not predict the accuracy. Thus only PIQA and ARC-Easy can show the effect on the accuracy.
 
 ## Decision rules
 
