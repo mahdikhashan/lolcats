@@ -1,0 +1,143 @@
+{
+  "scores": {
+    "stage1": {
+      "mmlu_subset": {
+        "n": 285,
+        "temperature": 1.0,
+        "answer_letter_tokens": {
+          "A": 1,
+          "B": 1,
+          "C": 1,
+          "D": 1
+        },
+        "mean_mass": 0.9623886797713874,
+        "mean_confidence": 0.45046950625564264,
+        "mean_entropy_bits": 1.7460200693318002,
+        "mmlu": true,
+        "acc": 0.2596491228070174,
+        "acc_stderr": 0.02597106729140352
+      },
+      "piqa": {
+        "n": 1838,
+        "temperature": 1.0,
+        "answer_letter_tokens": {
+          "A": 1,
+          "B": 1,
+          "C": 1,
+          "D": 1
+        },
+        "mean_mass": 9.98542023173233e-06,
+        "mean_confidence": 0.9293791873231437,
+        "mean_entropy_bits": 0.2370178015068768,
+        "mmlu": false,
+        "acc": 0.735038084874864,
+        "acc_stderr": 0.010296557993316052,
+        "acc_norm": 0.735038084874864,
+        "acc_norm_stderr": 0.01029655799331604
+      },
+      "arc_easy": {
+        "n": 2376,
+        "temperature": 1.0,
+        "answer_letter_tokens": {
+          "A": 1,
+          "B": 1,
+          "C": 1,
+          "D": 1
+        },
+        "mean_mass": 0.012702670211945764,
+        "mean_confidence": 0.8016954517540494,
+        "mean_entropy_bits": 0.7090279428503853,
+        "mmlu": false,
+        "acc": 0.6279461279461279,
+        "acc_stderr": 0.009918187193096466,
+        "acc_norm": 0.5803872053872053,
+        "acc_norm_stderr": 0.010126315840891539
+      }
+    }
+  },
+  "comparisons": {},
+  "letters": {
+    "stage1/mmlu_subset": {
+      "predicted": {
+        "A": 0.19298245614035087,
+        "B": 0.14736842105263157,
+        "C": 0.4280701754385965,
+        "D": 0.23157894736842105
+      },
+      "always_a_accuracy": 0.24210526315789474
+    }
+  },
+  "checkpoints": {
+    "stage1/mmlu_subset": {
+      "stage1": {
+        "path": "checkpoints/distill_llama3_1_1b_lk_smd_wtk64_fd64_w01/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-2_1b-m=distill_llama3_1_1b_lk_smd_wtk64_fd64_w01-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0-lzi=1_distill.pt",
+        "sha256": "200d27aa5393c1465c3f203639ad24ea2a791c0a54ee1f2a295776bcc0ee3c08",
+        "bytes": 16808818,
+        "step": 1100,
+        "losses": {
+          "distill/eval/loss": 0.4442138671875
+        },
+        "tensors": 48,
+        "parameters": 8389120,
+        "bytes_per_parameter": 2.0036449591852303,
+        "dtypes": {
+          "torch.bfloat16": 48
+        },
+        "expected_keys": 48,
+        "missing_keys": [],
+        "unexpected_keys": [],
+        "values_not_loaded": []
+      }
+    },
+    "stage1/piqa": {
+      "stage1": {
+        "path": "checkpoints/distill_llama3_1_1b_lk_smd_wtk64_fd64_w01/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-2_1b-m=distill_llama3_1_1b_lk_smd_wtk64_fd64_w01-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0-lzi=1_distill.pt",
+        "sha256": "200d27aa5393c1465c3f203639ad24ea2a791c0a54ee1f2a295776bcc0ee3c08",
+        "bytes": 16808818,
+        "step": 1100,
+        "losses": {
+          "distill/eval/loss": 0.4442138671875
+        },
+        "tensors": 48,
+        "parameters": 8389120,
+        "bytes_per_parameter": 2.0036449591852303,
+        "dtypes": {
+          "torch.bfloat16": 48
+        },
+        "expected_keys": 48,
+        "missing_keys": [],
+        "unexpected_keys": [],
+        "values_not_loaded": []
+      }
+    },
+    "stage1/arc_easy": {
+      "stage1": {
+        "path": "checkpoints/distill_llama3_1_1b_lk_smd_wtk64_fd64_w01/dl-d=distill_alpaca_clean_xent0_mse1000_lr1e-2_1b-m=distill_llama3_1_1b_lk_smd_wtk64_fd64_w01-f=finetune_lora_qkvo_alpaca_clean_1b-s=0-se=0-re=0-lzi=1_distill.pt",
+        "sha256": "200d27aa5393c1465c3f203639ad24ea2a791c0a54ee1f2a295776bcc0ee3c08",
+        "bytes": 16808818,
+        "step": 1100,
+        "losses": {
+          "distill/eval/loss": 0.4442138671875
+        },
+        "tensors": 48,
+        "parameters": 8389120,
+        "bytes_per_parameter": 2.0036449591852303,
+        "dtypes": {
+          "torch.bfloat16": 48
+        },
+        "expected_keys": 48,
+        "missing_keys": [],
+        "unexpected_keys": [],
+        "values_not_loaded": []
+      }
+    }
+  },
+  "training": {},
+  "lizard": {
+    "stage1": {
+      "gate_task": "hendrycksTest-high_school_us_history",
+      "prompt_tokens": 2048,
+      "layers": []
+    }
+  }
+}

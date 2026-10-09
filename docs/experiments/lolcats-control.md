@@ -1,6 +1,6 @@
 # Experiment: LoLCATs attention as a control in stage 1
 
-**Status:** Run 1 finished on 2026-10-09. Stage 1 validation loss 0.4442 (Lizard: 3.2549), PIQA 73.5 (Lizard: 57.6), ARC-Easy 62.8, MMLU subset 26.0. On PIQA and ARC-Easy, this model computes almost exactly the teacher attention ("Results", finding 2). Run 2 (per-layer table) finished on the same day. On far queries, the window keeps 31–79% of the attention weight. Layer 0 keeps its window, unlike Lizard (finding 8).
+**Status:** Run 1 finished on 2026-10-09. Stage 1 validation loss 0.4442 (Lizard: 3.2549), PIQA 73.5 (Lizard: 57.6), ARC-Easy 62.8, MMLU subset 26.0. On PIQA and ARC-Easy, this model computes almost exactly the teacher attention ("Results", finding 2). Run 2 (per-layer table) finished on the same day. On far queries, the window keeps 31–79% of the attention weight. Layer 0 keeps its window, unlike Lizard (finding 8). Run 3 (layer-wise MSE) finished on the same day. The error is lower than for every Lizard run in every layer, by 3.7–37× against Lizard Run 1 (finding 10).
 
 ## Question
 
@@ -143,6 +143,7 @@ CPU, 2026-10-09. The test ran the exact command of `make lolcats ARGS="--no_wand
 
 - **Training**: stage 1 on HF Jobs (H200) with the command above. These notes do not record the job ID or the time.
 - **Evaluation**: `scripts/compare_stages.sh` with `MODELS=stage1`, on `student06`, A10, on 2026-10-09 at 17:50 UTC. Run directory: `results/stages/20261009-194950-lolcats-control`. Code: lolcats `8bd7614`, harness `b281b09`, torch 2.5.1, transformers 4.43.1.
+- **Files in the repository**: [`lolcats-control/stage1-eval/`](lolcats-control/stage1-eval/), the run directory without the `eval.log` files. It has `summary.md`, `summary.json` and `env.txt`. For each task, it has `results.json`, `checkpoints.json`, `lizard.json` and the answer to each question.
 
 | Checkpoint | SHA-256 | Size | Parameters | Dtype | Stored step | Stored loss |
 |---|---|---|---|---|---|---|
@@ -188,6 +189,7 @@ In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with t
 - **Machine and code**: `student06`, A10, on 2026-10-09 at 18:25 UTC. Run directory: `results/stages/20261009-202521-lolcats-control-layers`. Code: lolcats `e5e0e9d`, harness `b281b09`.
 - **Checkpoint**: the checkpoint of Run 1 (SHA-256 `200d27aa…`, stored loss 0.4442). All 48 expected tensors loaded with their values.
 - **Prompt**: one 5-shot prompt of `hendrycksTest-high_school_us_history`, 2048 tokens. Thus the far queries are the positions 256–2047.
+- **Files in the repository**: [`lolcats-control/stage1-layers/`](lolcats-control/stage1-layers/), with `summary.md`, `summary.json`, `env.txt`, `checkpoints.json` and `lizard.json`.
 
 | Layer | Window factor mean | Min | Max | Window share, all queries | Far queries | Last query | φq RMS / max | φk RMS / max | φq change from identity | φk change from identity |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -215,6 +217,48 @@ In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with t
 **Finding 8: layer 0 differs from Lizard**. Over layers 1–15, the window share on far queries follows α of Lizard Run 1 stage 1 ([stage difference](stage-difference.md), finding 2). The rank correlation is 0.79. Over all 16 layers, it is 0.48. In layer 0, LoLCATs gives its window the largest share (0.79). Lizard gave its window almost no weight there (α = 0.042). This agrees with claim F of [document 15](../15-attention-math-side-by-side.md). A window without RoPE cannot give the local attention of layer 0, so the training of Lizard reduces its weight. With RoPE, the LoLCATs window keeps this task. α is a weight and not a share, so only the order of the layers compares.
 
 **Finding 9: the feature maps moved far from the identity**. The change ‖W − I‖ / ‖I‖ is 1.3–2.8 for φq and 1.2–2.7 for φk. φq changed more than φk in 14 of the 16 layers. Layer 0 changed least. The RMS rose from 0.088 (the identity) to 0.14–0.26.
+
+### Run 3: layer-wise MSE (2026-10-09)
+
+- **Command**: `scripts/layer_mse.py compute` with the checkpoint of Run 1, then `plot` against the 7 Lizard results of [XAI: layer-wise MSE](xai-layer-wise-mse.md) ("Evaluation" above).
+- **Machine and code**: `student06`, A10, lolcats `e523d45`, bf16 (the dtype of the model config).
+- **Data**: all 16 batches of the stage 1 validation data (32,768 tokens), the same data as for the Lizard results. Each layer gets the teacher input.
+- **Check**: the script gives 0.4444 against the stored loss 0.4442 (+0.044%). The bf16 checkpoints of Lizard gave −0.10% to −0.21%. All 48 expected tensors loaded.
+- **Files in the repository**: [`lolcats_attention_fd128.json`](xai-layer-wise-mse/lolcats_attention_fd128.json) and four plots in [`xai-layer-wise-mse/`](xai-layer-wise-mse/).
+
+The reference is Lizard Run 1 stage 1 (fd128, the same recipe and precision). MSE is 1000 × MSE, the scale of the stage 1 loss. Relative MSE is the MSE divided by the mean square of the teacher output.
+
+| Layer | MSE, Lizard | MSE, LoLCATs | Lizard ÷ LoLCATs | Relative MSE, Lizard | Relative MSE, LoLCATs |
+|---|---|---|---|---|---|
+| 0 | 0.1816 | 0.0049 | 36.9 | 0.400 | 0.011 |
+| 1 | 0.4046 | 0.0818 | 4.9 | 0.293 | 0.059 |
+| 2 | 0.4522 | 0.1139 | 4.0 | 0.438 | 0.110 |
+| 3 | 1.470 | 0.1661 | 8.8 | 0.509 | 0.057 |
+| 4 | 2.582 | 0.3057 | 8.4 | 0.411 | 0.049 |
+| 5 | 3.755 | 0.7148 | 5.3 | 0.385 | 0.073 |
+| 6 | 3.687 | 0.6297 | 5.9 | 0.332 | 0.057 |
+| 7 | 2.880 | 0.5409 | 5.3 | 0.235 | 0.044 |
+| 8 | 3.683 | 0.5914 | 6.2 | 0.254 | 0.041 |
+| 9 | 3.917 | 0.3755 | 10.4 | 0.345 | 0.033 |
+| 10 | 2.759 | 0.7529 | 3.7 | 0.270 | 0.074 |
+| 11 | 2.147 | 0.3338 | 6.4 | 0.382 | 0.059 |
+| 12 | 2.212 | 0.4020 | 5.5 | 0.393 | 0.071 |
+| 13 | 2.639 | 0.5455 | 4.8 | 0.328 | 0.068 |
+| 14 | 3.072 | 0.6286 | 4.9 | 0.296 | 0.061 |
+| 15 | 16.19 | 0.9232 | 17.5 | 0.537 | 0.031 |
+| Mean (the loss) | 3.2516 | 0.4444 | 7.3 | – | – |
+
+![Layer-wise MSE of Lizard Run 1 stage 1 and of the LoLCATs attention, and the change of each layer](xai-layer-wise-mse/lizard_vs_lolcats_attention.png)
+
+![Relative MSE of the LoLCATs attention and of the 7 Lizard stage 1 checkpoints, and the excess of each Lizard checkpoint over LoLCATs](xai-layer-wise-mse/lolcats_vs_all_lizard_relative.png)
+
+**Finding 10: LoLCATs has a lower error in every layer, against every Lizard run**. Against Lizard Run 1, the MSE is 3.7× (layer 10) to 36.9× (layer 0) lower. The relative MSE is 1.1–11.0%, against 23.5–53.7% for Lizard. For all 7 Lizard checkpoints, each layer has at least 3.0× the MSE of LoLCATs. The loss of the best Lizard run (R1b, 3.0542) is 6.9× the loss of LoLCATs.
+
+**Finding 11: layer 15 is a problem of Lizard, not of the teacher**. In Lizard, layer 15 gives 31.1% of the loss, and heads 14 and 23 alone give 21.4%. In LoLCATs, layer 15 gives 13.0% of the loss, and its relative MSE (3.1%) is the second lowest of all layers. Heads 14 and 23 have an MSE of 1.29 and 3.03, against 211.4 and 144.2 for Lizard. Together they give 1.9% of the loss. Thus the teacher heads are not hard to approximate. The limit for each head of Lizard ([gap analysis 2](../12-gap-analysis-2.md), section 3) is the more probable cause.
+
+**Finding 12: layer 0 has the largest difference**. Its MSE is 36.9× lower than for Lizard, with a relative MSE of 1.1%. This agrees with finding 8: with RoPE, the window of LoLCATs gives the local attention of layer 0, but the window of Lizard cannot.
+
+**Limits of this comparison**: each layer gets the teacher input, so the error of one layer does not reach the next layer. The window of LoLCATs is larger (128–255 tokens against 128), and its feature maps have 28× more parameters. This run cannot separate these causes from the form of the attention.
 
 ### Next steps
 

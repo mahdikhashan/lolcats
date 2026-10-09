@@ -1,0 +1,32 @@
+{
+  "results": {
+    "piqa": {
+      "acc": 0.735038084874864,
+      "acc_stderr": 0.010296557993316052,
+      "acc_norm": 0.735038084874864,
+      "acc_norm_stderr": 0.01029655799331604
+    }
+  },
+  "versions": {
+    "piqa": 0
+  },
+  "config": {
+    "model": "meta-llama/Llama-3.2-1B",
+    "model_args": "",
+    "num_fewshot": 0,
+    "batch_size": 1,
+    "batch_sizes": [],
+    "device": "cuda",
+    "no_cache": true,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "description_dict": {}
+  },
+  "temperature": 1.0,
+  "answer_letter_tokens": {
+    "A": 1,
+    "B": 1,
+    "C": 1,
+    "D": 1
+  }
+}
