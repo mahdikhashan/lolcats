@@ -1,6 +1,6 @@
 # Experiment: LoLCATs attention as a control in stage 1
 
-**Status:** Run 1 finished on 2026-10-09. Stage 1 validation loss 0.4442 (Lizard: 3.2549), PIQA 73.5 (Lizard: 57.6), ARC-Easy 62.8, MMLU subset 26.0. On PIQA and ARC-Easy, this model computes almost exactly the teacher attention ("Results", finding 2).
+**Status:** Run 1 finished on 2026-10-09. Stage 1 validation loss 0.4442 (Lizard: 3.2549), PIQA 73.5 (Lizard: 57.6), ARC-Easy 62.8, MMLU subset 26.0. On PIQA and ARC-Easy, this model computes almost exactly the teacher attention ("Results", finding 2). Run 2 (per-layer table) finished on the same day. On far queries, the window keeps 31–79% of the attention weight. Layer 0 keeps its window, unlike Lizard (finding 8).
 
 ## Question
 
@@ -182,10 +182,44 @@ In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with t
 
 **Finding 5: the most probable cause of the short-context gap of Lizard**. On a short prompt, Lizard never computes the teacher attention. Its window has no RoPE, and its gated branch adds weight on every token, also inside the window ([document 15](../15-attention-math-side-by-side.md), claims B, C and F). LoLCATs computes the teacher attention on a short prompt, because its window has RoPE and its linear branch excludes the window tokens.
 
+### Run 2: per-layer table (2026-10-09)
+
+- **Command**: `MODELS=stage1 TASKS=layers` of `scripts/compare_stages.sh` with the checkpoint of Run 1 ("Per-layer table alone" above). No benchmark.
+- **Machine and code**: `student06`, A10, on 2026-10-09 at 18:25 UTC. Run directory: `results/stages/20261009-202521-lolcats-control-layers`. Code: lolcats `e5e0e9d`, harness `b281b09`.
+- **Checkpoint**: the checkpoint of Run 1 (SHA-256 `200d27aa…`, stored loss 0.4442). All 48 expected tensors loaded with their values.
+- **Prompt**: one 5-shot prompt of `hendrycksTest-high_school_us_history`, 2048 tokens. Thus the far queries are the positions 256–2047.
+
+| Layer | Window factor mean | Min | Max | Window share, all queries | Far queries | Last query | φq RMS / max | φk RMS / max | φq change from identity | φk change from identity |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.116 | 0.102 | 0.134 | 0.818 | 0.792 | 0.757 | 0.146 / 1.80 | 0.138 / 1.46 | 1.325 | 1.191 |
+| 1 | 0.092 | 0.066 | 0.110 | 0.439 | 0.359 | 0.336 | 0.165 / 3.31 | 0.169 / 2.08 | 1.628 | 1.651 |
+| 2 | 0.096 | 0.080 | 0.107 | 0.399 | 0.313 | 0.335 | 0.185 / 3.72 | 0.159 / 1.86 | 1.906 | 1.525 |
+| 3 | 0.101 | 0.051 | 0.128 | 0.516 | 0.447 | 0.336 | 0.240 / 3.48 | 0.151 / 2.03 | 2.576 | 1.432 |
+| 4 | 0.107 | 0.070 | 0.124 | 0.623 | 0.569 | 0.509 | 0.240 / 4.12 | 0.157 / 2.03 | 2.585 | 1.497 |
+| 5 | 0.109 | 0.060 | 0.125 | 0.755 | 0.720 | 0.692 | 0.259 / 4.28 | 0.188 / 4.09 | 2.811 | 1.896 |
+| 6 | 0.113 | 0.102 | 0.129 | 0.782 | 0.751 | 0.756 | 0.232 / 3.06 | 0.184 / 3.14 | 2.467 | 1.850 |
+| 7 | 0.111 | 0.085 | 0.129 | 0.802 | 0.774 | 0.644 | 0.249 / 4.03 | 0.169 / 2.09 | 2.696 | 1.695 |
+| 8 | 0.111 | 0.078 | 0.129 | 0.772 | 0.739 | 0.777 | 0.236 / 4.00 | 0.176 / 4.00 | 2.534 | 1.794 |
+| 9 | 0.106 | 0.071 | 0.118 | 0.768 | 0.735 | 0.717 | 0.226 / 3.55 | 0.166 / 3.38 | 2.416 | 1.620 |
+| 10 | 0.100 | 0.050 | 0.130 | 0.687 | 0.642 | 0.583 | 0.227 / 3.50 | 0.254 / 3.52 | 2.427 | 2.723 |
+| 11 | 0.104 | 0.084 | 0.118 | 0.609 | 0.553 | 0.549 | 0.257 / 3.00 | 0.170 / 2.03 | 2.770 | 1.691 |
+| 12 | 0.095 | 0.059 | 0.110 | 0.520 | 0.451 | 0.440 | 0.230 / 4.22 | 0.178 / 2.86 | 2.451 | 1.791 |
+| 13 | 0.103 | 0.076 | 0.135 | 0.521 | 0.453 | 0.429 | 0.218 / 4.06 | 0.170 / 2.55 | 2.327 | 1.702 |
+| 14 | 0.101 | 0.075 | 0.129 | 0.558 | 0.495 | 0.613 | 0.228 / 4.38 | 0.173 / 2.08 | 2.436 | 1.762 |
+| 15 | 0.097 | 0.067 | 0.130 | 0.562 | 0.499 | 0.490 | 0.228 / 3.16 | 0.176 / 2.00 | 2.429 | 1.767 |
+
+**Finding 6: the window factors stay near their start value**. The layer means are 0.092–0.116, and the single heads are 0.050–0.135. The start value is 0.1. Thus the differences between the layers do not come from the window factors. They come from the scores of the window and from the feature maps.
+
+**Finding 7: the linear branch carries 21–69% of the weight on far queries**. On these queries, the window keeps 31–79% of the weight (mean over the layers: 0.58). The linear branch carries the most weight in layers 1–3 (55–69%) and the least in layer 0 and layers 5–9 (21–28%). Thus on long prompts, such as the 5-shot MMLU prompts, the linear branch has a large part in every layer.
+
+**Finding 8: layer 0 differs from Lizard**. Over layers 1–15, the window share on far queries follows α of Lizard Run 1 stage 1 ([stage difference](stage-difference.md), finding 2). The rank correlation is 0.79. Over all 16 layers, it is 0.48. In layer 0, LoLCATs gives its window the largest share (0.79). Lizard gave its window almost no weight there (α = 0.042). This agrees with claim F of [document 15](../15-attention-math-side-by-side.md). A window without RoPE cannot give the local attention of layer 0, so the training of Lizard reduces its weight. With RoPE, the LoLCATs window keeps this task. α is a weight and not a share, so only the order of the layers compares.
+
+**Finding 9: the feature maps moved far from the identity**. The change ‖W − I‖ / ‖I‖ is 1.3–2.8 for φq and 1.2–2.7 for φk. φq changed more than φk in 14 of the 16 layers. Layer 0 changed least. The RMS rose from 0.088 (the identity) to 0.14–0.26.
+
 ### Next steps
 
 1. X0: the teacher on PIQA and ARC-Easy in this harness (minutes). It checks finding 2.
-2. Lizard with `window_rope` in the setup of Run 1 (step B5 of [document 19](../19-next-steps-from-literature.md)). This is the most direct test of finding 5. It needs only a new model config: the Run 1 config with `attention_type: lolcats_llama_lizard_v2` and `window_rope: true`.
+2. Lizard with `window_rope` in the setup of Run 1 (step B5 of [document 19](../19-next-steps-from-literature.md)). This is the most direct test of findings 5 and 8. It needs only a new model config: the Run 1 config with `attention_type: lolcats_llama_lizard_v2` and `window_rope: true`. With RoPE, α of layer 0 must stay high, as the window share of LoLCATs does.
 3. A Lizard option that keeps the gated branch out of the window, as in LoLCATs (claim A of [document 15](../15-attention-math-side-by-side.md)). It needs a code change.
 4. Stage 2 of this LoLCATs model, against the target of the Liger paper (MMLU 23.1).
 5. ARC-Easy of Lizard Run 1 stage 1 (the reference evaluation above), to fill the empty cell.
