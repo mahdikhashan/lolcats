@@ -21,6 +21,7 @@ Run the Python scripts from the repository root. The shell scripts change to the
 ```bash
 scripts/compare_stages.sh                                   # teacher, stage 1 and stage 2 on 3 tasks
 MODELS=stage1 TASKS=mmlu_subset scripts/compare_stages.sh   # a part of it
+MODELS="teacher stage2" TASKS="arc_challenge hellaswag winogrande mmlu" scripts/compare_stages.sh   # the other tasks of Table 9 (Lizard paper)
 scripts/temperature.sh                                      # temperatures 0.1, 0.5, 1 and 2
 python scripts/compare_stages.py summary results/stages/<time>
 python scripts/letters.py results/lm_eval/hendrycksTest-5shot-<time>.log
