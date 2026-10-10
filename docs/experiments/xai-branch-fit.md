@@ -1,6 +1,6 @@
 # Experiment (XAI): branch decomposition
 
-**Status:** Run 1 finished on 2026-10-09: the 8 Lizard stage 1 checkpoints. Inside the window, the window branch without RoPE explains only approximately 60% of the teacher output. A window with RoPE would halve the error of the current branches, and 4–7 times in layers 0 and 15. The gated branch carries the long-range part, but with too much weight. This supports `window_rope` as the next change. Run 2 on 2026-10-10 added the `window_rope` checkpoint. Its window branch gives almost the teacher output at positions 0–127. There, the mix of the branches now gives most of the error. The best weight of the gated branch is 0.08 at positions 0–127 and 0.79 at positions 512–2047.
+**Status:** Run 1 finished on 2026-10-09: the 8 Lizard stage 1 checkpoints. Inside the window, the window branch without RoPE explains only approximately 60% of the teacher output. A window with RoPE would halve the error of the current branches, and 4–7 times in layers 0 and 15. The gated branch carries the long-range part, but with too much weight. This supports `window_rope` as the next change. Run 2 on 2026-10-10 added the `window_rope` checkpoint. Its window branch gives almost the teacher output at positions 0–127. There, the mix of the branches now gives most of the error. The best weight of the gated branch is 0.08 at positions 0–127 and 0.79 at positions 512–2047. Run 3 added `window_rope` with `hybrid`. In the 9 layers where its gate closed, the gated branch adds almost nothing.
 
 ## Question
 
@@ -208,6 +208,20 @@ Median weight of G in the G+W fit (the median over the layers of the median over
 **Finding 11: the best weight of the gated branch increases with the position**. Its median is 0.08 at positions 0–127 and 0.79 at positions 512–2047. Run 1 has the same pattern, from 0.42 to 0.84. With `gla_norm: row`, G keeps the weight 1 at each position. Thus finding 7 is mostly a problem of short positions. To correct this, G needs a weight that changes with the position, for example with the shared denominator of `hybrid`. Another way to correct it is a gated branch only for keys outside the window (step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5).
 
 **Finding 12: heads 14 and 23 of layer 15 are no longer the main source of the loss**. Their MSE is 13.7× and 11.3× lower than in Run 1 ([RoPE in the window branch](window-rope.md), finding 4). This agrees with finding 6.
+
+### Run 3: `window_rope` with `hybrid` (2026-10-10)
+
+- **Commands:** `branch_fit.py compute --from_json` and `plot` for the buckets 0–127 and all, in the evaluation block of [`window_rope` with the shared denominator](window-rope-hybrid.md). Machine: `student06`, one A10, lolcats `84228c5`.
+- **Checks:** all 80 expected keys loaded. The branches reproduce the checkpoint output with 1.7e-3 (bf16 rounding).
+- **Files:** [`xai-branch-fit/v2_window_rope_hybrid.json`](xai-branch-fit/v2_window_rope_hybrid.json). The heatmaps against `window_rope` are in [`window_rope` with the shared denominator](window-rope-hybrid.md), "Plots".
+- **G and W with `hybrid`** are the two branches with the shared denominator, and W is without \|α\|. If the trained mix is the best mix, the best weights are 1 for G and \|α\| for W.
+
+| Checkpoint | W, 0–127 | G+W, 0–127 | trained, 0–127 | G+W, all | trained, all |
+|---|---|---|---|---|---|
+| v2, window_rope, fd128, LoLCATs recipe, bf16 | 0.048 | 0.025 | 0.321 | 0.116 | 0.159 |
+| v2, window_rope, hybrid, fd128, LoLCATs recipe, bf16 | 0.112 | 0.075 | 0.222 | 0.190 | 0.249 |
+
+**Finding 13: with `hybrid`, the gated branch adds almost nothing in the layers where the gate closed**. In 9 of 16 layers, the gate is below 0.001 for almost all tokens ([`window_rope` with the shared denominator](window-rope-hybrid.md), finding 3). Over all positions, G alone keeps an error of 0.82–0.99 in these layers. G+W has 0.85–0.99× the error of W alone. At positions 0–127, the trained output has 3.0× the error of the best G+W mix (`window_rope`: 13×, finding 10).
 
 ## Decision rules
 
