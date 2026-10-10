@@ -1,6 +1,6 @@
 # Experiment (XAI): layer-wise MSE
 
-**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss. Run 2 on 2026-10-09 added the original LoLCATs attention as a control. In every layer, its MSE is at least 3.0× lower than the MSE of each of the 7 Lizard checkpoints. In LoLCATs, the two heads of layer 15 give only 1.9% of the loss. Run 3 on 2026-10-09 added config 2 (gradient clipping). In every layer, its MSE is 0.51–0.95 × that of config 1. Its loss is within 2.7% of the LoLCATs recipe.
+**Status:** Run 1 finished on 2026-10-02: five stage 1 checkpoints, without retraining. The script reproduces the stored validation loss of each checkpoint. Two heads of layer 15 give approximately 20% of the stage 1 loss. Run 2 on 2026-10-09 added the original LoLCATs attention as a control. In every layer, its MSE is at least 3.0× lower than the MSE of each of the 7 Lizard checkpoints. In LoLCATs, the two heads of layer 15 give only 1.9% of the loss. Run 3 on 2026-10-09 added config 2 (gradient clipping). In every layer, its MSE is 0.51–0.95 × that of config 1. Its loss is within 2.7% of the LoLCATs recipe. Run 4 on 2026-10-10 added `window_rope`. Its MSE is 1.5–5.3× lower than Lizard Run 1 in every layer, and only 1.7–10× higher than LoLCATs.
 
 ## Question
 
@@ -325,3 +325,33 @@ Config 2 is config 1 with gradient clipping at 1.0 ([gradient clipping](gradient
 **Finding 12: config 2 almost reaches the LoLCATs recipe**. Its MSE is 0.99–1.29 × that of fd32 with the LoLCATs recipe, and lower in 1 of 16 layers. The loss is 2.7% higher. Layer 15 still gives 29.8% of the loss, and heads 14 and 23 alone give 20.4% (finding 5).
 
 **Finding 13: config 2 is also far from LoLCATs**. Against LoLCATs, the MSE of config 2 is 4.2× (layer 10) to 45.6× (layer 0) higher. Thus all 8 Lizard checkpoints have at least 3.0× the MSE of LoLCATs in each layer (Run 2, finding 8).
+
+### Run 4: `window_rope` (2026-10-10)
+
+- **Commands:** `layer_mse.py compute` and `plot` against Lizard Run 1, in the evaluation block of [RoPE in the window branch](window-rope.md). Machine: `student06`, one A10, lolcats `02b4ce9`. Data: all 16 validation batches.
+- **Check:** all 80 expected keys loaded. The script gives the loss 1.2310, against the stored loss 1.2290 (+0.16%).
+- **Files:** [`v2_window_rope.json`](xai-layer-wise-mse/v2_window_rope.json). The plots against Lizard Run 1 are in [RoPE in the window branch](window-rope.md), "Plots".
+
+| Layer | 1000 × MSE | Relative MSE | Run 1 ÷ `window_rope` | `window_rope` ÷ LoLCATs |
+|---|---|---|---|---|
+| 0 | 0.04904 | 0.108 | 3.70 | 10.0 |
+| 1 | 0.1927 | 0.139 | 2.10 | 2.4 |
+| 2 | 0.2924 | 0.283 | 1.55 | 2.6 |
+| 3 | 0.6871 | 0.238 | 2.14 | 4.1 |
+| 4 | 0.9921 | 0.158 | 2.60 | 3.2 |
+| 5 | 1.223 | 0.125 | 3.07 | 1.7 |
+| 6 | 1.693 | 0.152 | 2.18 | 2.7 |
+| 7 | 1.542 | 0.126 | 1.87 | 2.9 |
+| 8 | 1.698 | 0.117 | 2.17 | 2.9 |
+| 9 | 1.465 | 0.129 | 2.67 | 3.9 |
+| 10 | 1.555 | 0.152 | 1.77 | 2.1 |
+| 11 | 0.9818 | 0.175 | 2.19 | 2.9 |
+| 12 | 0.9391 | 0.167 | 2.36 | 2.3 |
+| 13 | 1.726 | 0.215 | 1.53 | 3.2 |
+| 14 | 1.626 | 0.157 | 1.89 | 2.6 |
+| 15 | 3.033 | 0.101 | 5.34 | 3.3 |
+| Mean (the loss) | 1.2310 | – | 2.64 | 2.8 |
+
+**Finding 14: `window_rope` lowers the MSE in every layer, most of all in layers 15 and 0**. Against Lizard Run 1, the MSE is 1.5–5.3× lower. Layer 15 decreases from 16.19 to 3.03 and gives 15% of the loss (Run 1: 31%). Heads 14 and 23 of layer 15 give 4.4% of the loss (Run 1: 21%, finding 5).
+
+**Finding 15: `window_rope` is the first Lizard checkpoint with less than 3.0× the MSE of LoLCATs in some layers**. The factor is 1.7–10×, and below 3.0× in 10 of 16 layers. Layer 0 has the largest factor (10×). Its relative MSE is 0.108, against 0.011 for LoLCATs. The 8 earlier Lizard checkpoints have at least 3.0× in every layer (findings 8 and 13).
