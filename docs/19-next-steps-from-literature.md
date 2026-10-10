@@ -26,7 +26,7 @@
 
 | # | Step | Reason | Cost | Decision |
 |---|---|---|---|---|
-| A1 | The teacher on PIQA, ARC-Easy, ARC-Challenge, HellaSwag and WinoGrande in this harness (X0) | The target in this harness is not measured. The Lizard paper, STILL and Meta give 31.0, 31.9 and 32.2 for MMLU. | Minutes on the A10 | Use these values as the target for every later result. |
+| A1 | The teacher on PIQA, ARC-Easy, ARC-Challenge, HellaSwag and WinoGrande in this harness (X0) | The target in this harness is not measured. The Lizard paper, STILL and Meta give 31.0, 31.9 and 32.2 for MMLU. **Done in part (2026-10-10):** PIQA 74.4 and ARC-Easy 65.3. ARC-Challenge, HellaSwag and WinoGrande are still open. | Minutes on the A10 | Use these values as the target for every later result. |
 | A2 | **Positive control:** the original LoLCATs attention on Llama-3.2-1B, with the same pipeline and harness (`make lolcats`) | The Liger paper gives a target for LoLCATs at 1B: PIQA 74.1, ARC-Easy 63.7, MMLU 23.1. This control separates the pipeline from the Lizard layer. | Approximately 4 hours and $19 on the H200 (estimate from [document 2](02-compute-and-cost.md)) | Near the target: the gap is specific to Lizard. Near 68 / 55: the cause is in the pipeline, the data or the harness. |
 | A3 | MMLU with rotated answer options | It separates the knowledge from the letter preference ("Stuck on A", Bick et al.). | Minutes and a small script | The same answer content at every position: the model knows the answer. The same letter at every position: an interface injury. |
 | A4 | The ACL version of the Lizard paper, and a message to the authors | The search found no code. The abstract of the paper changed between the versions. | No runs | Write down each answer, and each change in Table 9. |

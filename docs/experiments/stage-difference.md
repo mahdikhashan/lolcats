@@ -54,7 +54,7 @@ Each run writes `results/stages/<time>/` with `summary.md`, `summary.json`, `env
 
 **Finding: on PIQA, stage 2 does not cause the drop.** Model C is approximately 10.4 points above model B. The unpaired SE of this difference is approximately 1.6, so z ≈ 6.4. Thus stage 2 recovers approximately 10 points.
 
-The teacher is not measured in this harness yet. Thus the size of the stage 1 drop is not known. With the teacher value of the paper (74.1), the stage 1 drop would be approximately 16.5 points. This preliminary result agrees with the outcome "stage 1 failure, and stage 2 recovers part of it". The full run must check it with the teacher and with paired statistics.
+At the time of this run, the teacher had no PIQA value in this harness. **Update (2026-10-10):** the teacher has 74.4 on PIQA in this harness (X0). Thus the stage 1 drop is 16.8 points. With the teacher value of the paper (74.1), the stage 1 drop would be approximately 16.5 points. This preliminary result agrees with the outcome "stage 1 failure, and stage 2 recovers part of it". The full run must check it with the teacher and with paired statistics.
 
 ### Checkpoint check (sections 3 and 9 of the gap analysis)
 

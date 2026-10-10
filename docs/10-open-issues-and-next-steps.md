@@ -13,7 +13,7 @@
 
 ## Missing measurements
 
-1. **The teacher on PIQA and ARC-Easy in the same harness.** This gives the exact gap, because the paper used a newer harness. Use the teacher command in [document 6](06-evaluation-setup.md) with `--task piqa` or `--task arc_easy`, with `--num_shots 0`, and without `--limit`.
+1. **The teacher on PIQA and ARC-Easy in the same harness.** This gives the exact gap, because the paper used a newer harness. **Done on 2026-10-10:** PIQA 74.4, ARC-Easy 65.3 ([document 7](07-results.md)). Use the teacher command in [document 6](06-evaluation-setup.md) with `--task piqa` or `--task arc_easy`, with `--num_shots 0`, and without `--limit`.
 2. **The teacher on all MMLU questions**, and `scripts/letters.py` on its log. The teacher should show no strong correlation with one letter. This would be different from the constant answer of the Lizard model.
 3. **Gate statistics** with `gates.py` ([document 6](06-evaluation-setup.md)). They show how much information the gated branch keeps from tokens beyond the window.
 4. **The stage 2 validation loss of Run 2**, from its results CSV on the Hub.

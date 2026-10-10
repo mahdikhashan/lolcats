@@ -13,10 +13,10 @@ The standard errors (SE) are binomial, `sqrt(p (1 − p) / n)`, as the harness r
 |---|---|---|---|---|---|
 | MMLU 5-shot, all questions | **23.3** | not run yet | 29.8 | 27.3 | 31.0 |
 | MMLU 5-shot, MMLU subset (285 questions) | 24.9 | 33.7 | – | – | – |
-| PIQA, 0-shot (accuracy) | **68.0 ± 1.1** | not run yet | 74.8 | 74.6 | 74.1 |
-| ARC-Easy, 0-shot (accuracy) | **54.8 ± 1.0** | not run yet | 65.6 | 63.0 | 65.4 |
+| PIQA, 0-shot (accuracy) | **68.0 ± 1.1** | 74.4 ± 1.0 | 74.8 | 74.6 | 74.1 |
+| ARC-Easy, 0-shot (accuracy) | **54.8 ± 1.0** | 65.3 ± 1.0 | 65.6 | 63.0 | 65.4 |
 
-The paper values come from its Table 9. The paper used a newer harness version. Thus the exact gap needs an evaluation of the teacher in this harness ([document 10](10-open-issues-and-next-steps.md)).
+The paper values come from its Table 9. The paper used a newer harness version. Thus the exact gap needs an evaluation of the teacher in this harness ([document 10](10-open-issues-and-next-steps.md)). This evaluation ran on 2026-10-10 ([summary](teacher-x0/summary.md)). On PIQA and ARC-Easy, the teacher in this harness is within 0.3 points of the teacher of the paper.
 
 **Update (2026-10-10).** A later model with RoPE in the window branch gives PIQA 73.1 and ARC-Easy 63.8 after stage 2. Section 6 compares it with the Lizard model of this document.
 
@@ -71,10 +71,10 @@ For these tasks, the score uses the likelihood of the full answer text. Thus a l
 | PIQA (1,838 questions) | 67.95 ± 1.09 | 66.59 ± 1.10 | 74.8 |
 | ARC-Easy (2,376 questions) | 54.80 ± 1.02 | 50.08 ± 1.03 | 65.6 |
 
-The paper reports the accuracy (`acc`) for both tasks.
+The paper reports the accuracy (`acc`) for both tasks. The teacher in this harness has 74.43 ± 1.02 on PIQA (normalized 74.48) and 65.32 ± 0.98 on ARC-Easy (normalized 60.27), measured on 2026-10-10.
 
 - Both results are far above chance (50% for PIQA, 25% for ARC-Easy). Thus the model still works as a language model.
-- Both results are clearly below the paper: approximately 6.3 SE below on PIQA and 10.6 SE below on ARC-Easy. They are also below the LoLCATs 1B values of the paper (74.6, 63.0).
+- Both results are clearly below the paper: approximately 6.3 SE below on PIQA and 10.6 SE below on ARC-Easy. They are also below the LoLCATs 1B values of the paper (74.6, 63.0). Against the teacher in this harness, they are 6.5 and 10.5 points lower.
 - **Finding: the damage is wide**. It is not limited to MMLU or to long contexts. Lizard attention uses no RoPE. Thus, even over short spans, the model needs the trained feature maps, the gate and α to get the token order. It also needs them to get the attention patterns of the teacher.
 
 ## 5. Disabled branches during inference (`ablate.py`, PIQA)
@@ -100,15 +100,15 @@ The paper reports the accuracy (`acc`) for both tasks.
 
 The Lizard attention v2 with RoPE in the window branch (`window_rope`), after stage 1 and stage 2. The harness, the tasks and the questions are the same as above. [RoPE in the window branch](experiments/window-rope.md), Run 2, gives all details.
 
-| Task | Lizard model (this document) | `window_rope` after stage 2 | Difference | Paper: Lizard 1B |
-|---|---|---|---|---|
-| MMLU subset (285 questions) | 24.9 | 25.6 | +0.7 points | – |
-| PIQA (accuracy) | 67.95 ± 1.09 | **73.1 ± 1.0** | +5.1 points, z ≈ 3.4 | 74.8 |
-| ARC-Easy (accuracy) | 54.8 ± 1.0 | **63.8 ± 1.0** | +9.0 points, z ≈ 6.3 | 65.6 |
-| Stage 2 validation loss | 2.252 | 1.235 | – | – |
+| Task | Lizard model (this document) | `window_rope` after stage 2 | Difference | Teacher (this harness) | Paper: Lizard 1B |
+|---|---|---|---|---|---|
+| MMLU subset (285 questions) | 24.9 | 25.6 | +0.7 points | 33.7 | – |
+| PIQA (accuracy) | 67.95 ± 1.09 | **73.1 ± 1.0** | +5.1 points, z ≈ 3.4 | 74.4 ± 1.0 | 74.8 |
+| ARC-Easy (accuracy) | 54.8 ± 1.0 | **63.8 ± 1.0** | +9.0 points, z ≈ 6.3 | 65.3 ± 1.0 | 65.6 |
+| Stage 2 validation loss | 2.252 | 1.235 | – | – | – |
 
 - The "A" collapse on MMLU is gone ("A" for 41.4% of the questions). But the MMLU subset stays at chance, and the teacher has 33.7.
-- The paper values come from a newer harness. The teacher in this harness on PIQA and ARC-Easy is still not measured.
+- On PIQA and ARC-Easy, `window_rope` gets 98.2% and 97.7% of the teacher in this harness. The differences are −1.4 points (z ≈ −0.9) and −1.5 points (z ≈ −1.1), with unpaired SEs.
 
 ## Interpretation so far
 
