@@ -61,7 +61,7 @@ The answer proposes a thesis structure from the reproduction study of Behavior T
 
 | # | Addition | Cost | Answers |
 |---|---|---|---|
-| 1 | The teacher on PIQA and ARC-Easy in this harness (X0) | Minutes on the A10 | RQ1, RQ2 |
+| 1 | The teacher on PIQA and ARC-Easy in this harness (X0). **Done on 2026-10-10:** PIQA 74.4, ARC-Easy 65.3. | Minutes on the A10 | RQ1, RQ2 |
 | 2 | One reproduction matrix: each part of the recipe, paper against this project, with "same", "different" or "unknown" | No runs | RQ2 |
 | 3 | A run record for each job: commit, image digest, configs, job ID, GPU flavor, seed, checkpoint SHA-256, harness commit | No runs | All |
 | 4 | Save the stage 1 checkpoint at each evaluation, then run `layer_mse.py` on each | Small code change. Approximately 100 MB for each run. | RQ4 |

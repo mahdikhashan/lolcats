@@ -169,13 +169,14 @@ In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with t
 | LoLCATs attention, stage 1 (this run) | 73.5 | 62.8 |
 | Lizard model after stage 2 (Run 2, [document 7](../07-results.md)) | 67.95 | 54.8 |
 | Lizard, best stage 1 on ARC-Easy (config 1, [second round](second-round.md)) | 57.3 | 36.5 |
+| Teacher, this harness (X0, 2026-10-10, [summary](../teacher-x0/summary.md)) | 74.4 | 65.3 |
 | Teacher, Lizard paper (another harness) | 74.1 | 65.4 |
 | Lizard 1B, Lizard paper | 74.8 | 65.6 |
 | LoLCATs 1B after stage 2, Liger paper | 74.1 | 63.7 |
 
 **Finding 1: the pipeline can train a much better model than the Lizard runs**. LoLCATs after stage 1 is 15.9 points above Lizard after stage 1 on PIQA. Without stage 2, it is also above the final Lizard model on PIQA (+5.5, z ≈ 3.8) and on ARC-Easy (+8.0, z ≈ 5.6). The pipeline, the data, the recipe and the harness are the same. Thus the gap on these tasks comes from the Lizard layer. This is the first row of "How to compare".
 
-**Finding 2: on PIQA and ARC-Easy, this model computes almost exactly the teacher attention**. The terraced window gives exact softmax attention with RoPE over up to 255 tokens. The linear branch acts only on tokens farther back. 95% of the PIQA and ARC-Easy prompts have fewer than approximately 90 tokens ([document 13](../13-lizard-attention-v2.md), an estimate). For such a prompt, the window factor cancels, and the output is the softmax attention of the teacher, up to rounding. Thus these two scores test the window, not the linear attention. They are probably near the teacher scores in this harness. X0 of [gap analysis 2](../12-gap-analysis-2.md) has not run yet and can check this.
+**Finding 2: on PIQA and ARC-Easy, this model computes almost exactly the teacher attention**. The terraced window gives exact softmax attention with RoPE over up to 255 tokens. The linear branch acts only on tokens farther back. 95% of the PIQA and ARC-Easy prompts have fewer than approximately 90 tokens ([document 13](../13-lizard-attention-v2.md), an estimate). For such a prompt, the window factor cancels, and the output is the softmax attention of the teacher, up to rounding. Thus these two scores test the window, not the linear attention. They are probably near the teacher scores in this harness. X0 of [gap analysis 2](../12-gap-analysis-2.md) checks this. **Result (2026-10-10):** the teacher has 74.4 on PIQA and 65.3 on ARC-Easy. Thus PIQA is 0.9 points below the teacher, which agrees with this finding. ARC-Easy is 2.5 points below the teacher (z ≈ −1.8).
 
 **Finding 3: LoLCATs also approximates long sequences much better**. The stage 1 loss uses sequences of 2048 tokens, so the linear branch acts on most positions. The loss is 7.3× lower than for Lizard. Two differences explain a part of this: the larger window (128–255 tokens against 128) and the feature maps for each head (28× more parameters). This run cannot separate the causes.
 
@@ -262,7 +263,7 @@ The reference is Lizard Run 1 stage 1 (fd128, the same recipe and precision). MS
 
 ### Next steps
 
-1. X0: the teacher on PIQA and ARC-Easy in this harness (minutes). It checks finding 2.
+1. X0: the teacher on PIQA and ARC-Easy in this harness (minutes). It checks finding 2. **Done on 2026-10-10** (finding 2).
 2. Lizard with `window_rope` in the setup of Run 1 (step B5 of [document 19](../19-next-steps-from-literature.md)). This is the most direct test of findings 5 and 8. It needs only a new model config: the Run 1 config with `attention_type: lolcats_llama_lizard_v2` and `window_rope: true`. With RoPE, α of layer 0 must stay high, as the window share of LoLCATs does.
 3. A Lizard option that keeps the gated branch out of the window, as in LoLCATs (claim A of [document 15](../15-attention-math-side-by-side.md)). It needs a code change.
 4. Stage 2 of this LoLCATs model, against the target of the Liger paper (MMLU 23.1).

@@ -106,10 +106,10 @@ These notes use each term below with one meaning only.
   |---|---|---|---|---|
   | MMLU 5-shot, all questions | 23.3 | not run yet | 29.8 | 31.0 |
   | MMLU 5-shot, MMLU subset | 24.9 | 33.7 | – | – |
-  | PIQA (accuracy) | 68.0 | not run yet | 74.8 | 74.1 |
-  | ARC-Easy (accuracy) | 54.8 | not run yet | 65.6 | 65.4 |
+  | PIQA (accuracy) | 68.0 | 74.4 | 74.8 | 74.1 |
+  | ARC-Easy (accuracy) | 54.8 | 65.3 | 65.6 | 65.4 |
 
-- **Update (2026-10-10): RoPE in the window branch.** After stage 2, `window_rope` gives PIQA 73.1, ARC-Easy 63.8 and MMLU subset 25.6. See [RoPE in the window branch](experiments/window-rope.md), Run 2, and [document 7](07-results.md), section 6.
+- **Update (2026-10-10): RoPE in the window branch.** After stage 2, `window_rope` gives PIQA 73.1, ARC-Easy 63.8 and MMLU subset 25.6. The teacher in this harness has 74.4 and 65.3 (measured on 2026-10-10), so these are 98.2% and 97.7% of the teacher. See [RoPE in the window branch](experiments/window-rope.md), Run 2, and [document 7](07-results.md), section 6.
 - **MMLU behavior.** On MMLU, the Lizard model selects "A" for almost every question. The per-subject accuracy has a correlation of +0.98 with the frequency of "A" as the right answer.
 - **Both branches are active.** A disabled window branch drops PIQA accuracy to 57.2. A disabled gated branch drops it to 52.3.
 - **Diagnosis so far.** The checks exclude the attention code, the connection into the model and the harness as causes. The recipe of the runs is different from the recipe of the paper. The stage 1 learning rate is 10× higher, with no warmup and no gradient clipping, and the schedules are constant. This difference is the most probable cause. A controlled run must test it ([document 10](10-open-issues-and-next-steps.md)).

@@ -131,7 +131,7 @@ The gate is different. The paper chose the shared scalar gate on purpose. Table 
 | 3 | **Stage 1 recipe** | Stage 1 | The recipe of the paper in float32 does not beat the LoLCATs recipe. Clipping lowered the loss to 3.5092, 2.6% above the LoLCATs recipe, with no clear change in the accuracies. The LoLCATs recipe in float32 is not measured. | Partly tested. Smaller than expected. |
 | 4 | **Stage 1 too short** | Stage 1 | In the float32 runs, the best step is the last evaluation. The loss still decreased. | Probable, not measured |
 | 5 | **The "A" collapse on MMLU** | Downstream | Probably a symptom of rank 1: no copy heads (section 3.4) | Hypothesis |
-| 6 | **Data, packing and harness** | Both | No new evidence. The teacher is not measured on PIQA and ARC-Easy in this harness yet. | Open, inexpensive to check |
+| 6 | **Data, packing and harness** | Both | X0 (2026-10-10): in this harness, the teacher has 74.4 on PIQA and 65.3 on ARC-Easy, within 0.3 points of the paper. Thus the harness does not explain the gap on these two tasks. | Harness excluded for PIQA and ARC-Easy. Data and packing open. |
 
 ## 5. Proposed experiments
 
@@ -141,7 +141,7 @@ These experiments estimate the gain of the code changes in section 5.2 before an
 
 | # | Experiment | Method | Question | Cost |
 |---|---|---|---|---|
-| X0 | Teacher baselines | The teacher on PIQA and ARC-Easy with `compare_stages.sh` (`MODELS=teacher`) | What is the target in this harness? | Minutes |
+| X0 | Teacher baselines | The teacher on PIQA and ARC-Easy with `compare_stages.sh` (`MODELS=teacher`) | What is the target in this harness? **Done on 2026-10-10:** PIQA 74.4, ARC-Easy 65.3. | Minutes |
 | X1 | Best α for each head | For each head $h$, find the α that minimizes $\Vert \mathbf{y}^{teacher} - \mathbf{y}^{gla} - \alpha_h \mathbf{y}^{window} \Vert^2$. The closed form is $\alpha_h = \langle \mathbf{y}^{teacher} - \mathbf{y}^{gla}, \mathbf{y}^{window} \rangle / \Vert \mathbf{y}^{window} \Vert^2$. Then calculate the new MSE of each layer. | How much of the loss can one α for each head remove (code change C1)? | Approximately 1 hour |
 | X2 | Best scale of the gated branch for each head | The same least squares with two numbers for each head: $\beta_h \mathbf{y}^{gla} + \alpha_h \mathbf{y}^{window}$. $\beta_h < 1$ makes the gated output smaller. | How much can a gated branch without a fixed row sum remove (code change C3)? | Approximately 1 hour |
 | X3 | Best constant gate for each head | For each layer and head, the constant γ from {0.5, 0.9, 0.99, 0.999, 1} with the lowest MSE. This extends step 2 of section 13.5 of document 11 to each head. | Would a gate for each head help (code change C4)? | A few hours |

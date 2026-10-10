@@ -46,7 +46,7 @@ Documents 1–3 (the port and the infrastructure), the figures and the definitio
 
 | Idea | Question | Cost | Source |
 |---|---|---|---|
-| X0: the teacher on PIQA and ARC-Easy in this harness | What is the target in this harness? | Minutes on the A10 | [12](12-gap-analysis-2.md), [17](17-reproduction-studies.md) |
+| X0: the teacher on PIQA and ARC-Easy in this harness | What is the target in this harness? **Done on 2026-10-10:** PIQA 74.4, ARC-Easy 65.3. | Minutes on the A10 | [12](12-gap-analysis-2.md), [17](17-reproduction-studies.md) |
 | The MMLU subset and PIQA with and without BOS | Does the missing BOS in the evaluation cause the "A" collapse? | Minutes | [11](11-gap-analysis.md), section 13.5 |
 | X1–X3: the best α, the best scale of the gated branch and the best constant gate for each head | Which code change can help, before any training? | Some hours on the A10 or less | [12](12-gap-analysis-2.md) |
 | X4 and X5: a repeat test and classes of teacher heads | Can Lizard copy? Which heads are local? | Minutes | [12](12-gap-analysis-2.md) |
@@ -64,4 +64,4 @@ Documents 1–3 (the port and the infrastructure), the figures and the definitio
 - **The drop starts in stage 1.** Stage 2 recovers approximately 10 PIQA points, with both stage 2 recipes.
 - **A lower loss does not give a higher accuracy.** The stage 1 loss fell from 8.16 to 3.05 over the runs. PIQA and ARC-Easy did not improve.
 - **The main open cause is the architecture:** a limit for each head, and a window without RoPE. The design options of rows 24–26 tested this cause only in part.
-- **One inexpensive check is still open:** the teacher on PIQA and ARC-Easy in this harness (X0).
+- **The inexpensive check X0 ran on 2026-10-10:** in this harness, the teacher has 74.4 on PIQA and 65.3 on ARC-Easy.

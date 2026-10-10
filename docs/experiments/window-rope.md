@@ -1,6 +1,6 @@
 # Experiment: RoPE in the window branch (`window_rope`)
 
-**Status:** Stage 1 and stage 2 finished on 2026-10-10. After stage 2: PIQA 73.1 and ARC-Easy 63.8, against 68.0 and 54.8 for Run 2 of Lizard Run 1. MMLU subset 25.6 ("Results", Run 2). After stage 1: validation loss 1.2290 (Run 1: 3.2549). PIQA 61.5 (Run 1: 57.6), ARC-Easy 43.3 (Run 1: 39.0), MMLU subset 24.6 (Run 1: 22.5). All six predictions hold. At positions 0–127, the window branch now gives almost the teacher output. There, most of the error comes from the mix of the two branches. The gated branch keeps the weight 1, but its best weight there is 0.08 ("Results", findings 6 and 7).
+**Status:** Stage 1 and stage 2 finished on 2026-10-10. After stage 2: PIQA 73.1 and ARC-Easy 63.8, against 68.0 and 54.8 for Run 2 of Lizard Run 1. MMLU subset 25.6 ("Results", Run 2). The teacher in this harness has 74.4 and 65.3. After stage 1: validation loss 1.2290 (Run 1: 3.2549). PIQA 61.5 (Run 1: 57.6), ARC-Easy 43.3 (Run 1: 39.0), MMLU subset 24.6 (Run 1: 22.5). All six predictions hold. At positions 0–127, the window branch now gives almost the teacher output. There, most of the error comes from the mix of the two branches. The gated branch keeps the weight 1, but its best weight there is 0.08 ("Results", findings 6 and 7).
 
 ## Question
 
@@ -276,7 +276,7 @@ All values come from the same harness. z values with unpaired SEs. Run 2 is the 
 | "A" / "B" / "C" / "D" on MMLU | 98.6% / 1.1% / 0.4% / 0.0% | 40.0% / 20.4% / 16.5% / 23.2% | 41.4% / 37.5% / 20.7% / 0.4% | – | 19.3% / 14.7% / 42.8% / 23.2% |
 | Letter mass, confidence, entropy | – | 0.498, 0.743, 0.963 bits | 0.980, 0.348, 1.908 bits | – | 0.962, 0.450, 1.746 bits |
 
-The teacher gets 33.7 on the MMLU subset in this harness ([document 7](../07-results.md)). Its PIQA and ARC-Easy in this harness are not measured yet.
+In this harness, the teacher gets 33.7 on the MMLU subset ([document 7](../07-results.md)). It gets 74.4 ± 1.0 on PIQA and 65.3 ± 1.0 on ARC-Easy (X0, 2026-10-10, [summary](../teacher-x0/summary.md)).
 
 Values of the papers, from another version of the harness ([document 7](../07-results.md), Table 9 of the Lizard paper):
 
@@ -293,6 +293,8 @@ Values of the papers, from another version of the harness ([document 7](../07-re
 
 **Finding 12: PIQA and ARC-Easy come near the values of the papers, but these values come from another harness**. PIQA is 1.7 points below Lizard 1B of the paper (74.8), and ARC-Easy is 1.8 points below (65.6). ARC-Easy is above LoLCATs 1B of the paper (63.0). The paper used a newer version of the harness. Thus only the teacher in this harness can give the real gap. In this harness, the LoLCATs attention after stage 1 has 73.5 and 62.8.
 
+**X0 (2026-10-10):** in this harness, the teacher has 74.4 on PIQA and 65.3 on ARC-Easy. These values are within 0.3 points of the teacher of the paper (74.1 and 65.4). Thus `window_rope` gets 98.2% and 97.7% of the teacher. The differences are −1.4 points (z ≈ −0.9) and −1.5 points (z ≈ −1.1), with unpaired SEs. Run 2 got 91.3% and 83.9%.
+
 **Finding 13: the stage 2 loss is much lower than in Run 2**. The final validation loss is 1.235, against 2.252 for Run 2. The loss still decreased at the last evaluation (by 0.002 after step 1000).
 
 **Finding 14: MMLU stays at chance**. The accuracy is 25.6%, and the teacher has 33.7%. The "A" collapse of Run 2 (98.6% "A") is gone, and the four letters get 98.0% of the probability. But the probability is spread almost evenly over "A", "B" and "C" (confidence 0.348, entropy 1.908 bits), and "D" gets 0.4% of the answers. Thus the model gives the answer format, but it does not find the right answer. The 5-shot MMLU prompts are long (up to 2048 tokens). Thus MMLU probably depends more on the part of the attention outside the window than PIQA and ARC-Easy do. This is a hypothesis.
@@ -300,7 +302,7 @@ Values of the papers, from another version of the harness ([document 7](../07-re
 #### Decision of Run 2
 
 - **Report:** `window_rope` after stage 2 is the best Lizard model of this project. It is an extension, not the reproduction ([document 19](../19-next-steps-from-literature.md), part B).
-- **Next, in minutes on the A10:** the teacher on PIQA and ARC-Easy in this harness (X0 of [gap analysis 2](../12-gap-analysis-2.md)). The command is `MODELS=teacher TASKS="piqa arc_easy" scripts/compare_stages.sh`. It gives the real gap to the teacher.
+- **Done on 2026-10-10:** the teacher on PIQA and ARC-Easy in this harness (X0 of [gap analysis 2](../12-gap-analysis-2.md)), with `MODELS=teacher TASKS="piqa arc_easy" scripts/compare_stages.sh`. It gives 74.4 and 65.3 (finding 12).
 - **The remaining gap is MMLU** (25.6 against 33.7 for the teacher). Changes to the part outside the window, such as the gated branch and step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), target this gap. Their effect must be checked on MMLU, not only on PIQA and ARC-Easy.
 
 ## Decision rules

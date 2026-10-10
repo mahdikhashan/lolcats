@@ -281,5 +281,5 @@ Together, these changes moved the final PIQA and ARC-Easy scores by 0.3 points o
 #### Open items
 
 - **Paired statistics for stage 1 and stage 2**. The stage 1 results in `results/stages/20261002-102425` and the stage 2 results of this run have the same questions. The `paired` function of `scripts/compare_stages.py` can compare them without a new evaluation.
-- **The teacher on PIQA and ARC-Easy in this harness** (X0 of gap analysis 2). The comparison above uses the teacher values of the paper.
+- **The teacher on PIQA and ARC-Easy in this harness** (X0 of gap analysis 2). The comparison above uses the teacher values of the paper. **Done on 2026-10-10:** PIQA 74.4 and ARC-Easy 65.3, within 0.3 points of the paper ([document 7](../07-results.md)).
 - **Stage 2 with trainable Lizard parameters** (a variant of H5). Finding 5 shows that the frozen gate gets a different input after stage 2. A trainable gate could adapt to this input.
