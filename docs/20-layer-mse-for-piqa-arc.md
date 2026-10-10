@@ -1,6 +1,6 @@
 # 20. Lower layer-wise MSE for PIQA and ARC-Easy
 
-**Status:** An analysis and a plan from 2026-10-09. Nothing has run. The analysis uses the figure [`lizard_vs_lolcats_attention.png`](experiments/xai-layer-wise-mse/lizard_vs_lolcats_attention.png), the stored PIQA and ARC-Easy prompts, and a web search. The session could not open arXiv. Thus the values from papers come from search snippets. Check each value against the paper before the thesis cites it.
+**Status:** An analysis and a plan from 2026-10-09. X1 and X2 ran on 2026-10-09, and step 2 (`window_rope`) on 2026-10-10 (sections 4 and 5). The analysis uses the figure [`lizard_vs_lolcats_attention.png`](experiments/xai-layer-wise-mse/lizard_vs_lolcats_attention.png), the stored PIQA and ARC-Easy prompts, and a web search. The session could not open arXiv. Thus the values from papers come from search snippets. Check each value against the paper before the thesis cites it.
 
 ## 1. What the figure shows
 
@@ -100,8 +100,8 @@ Done already:
 | # | Change | Part | Target | Code | Cost |
 |---|---|---|---|---|---|
 | 1 | X1 and X2 | – | Select the part to change | Small | A10, approximately 1 hour, free |
-| 2 | `window_rope` in the setup of Run 1 ([experiment](experiments/window-rope.md)) | Window | Positions 0–127, thus PIQA and ARC-Easy. Layer 0. | None, the option exists ([document 13](13-lizard-attention-v2.md)). The model config exists. | One stage 1: approximately 50 minutes and $5 on the H200 (bf16). Or a few layers on the A10 ([faster feedback loop](experiments/fast-feedback-loop.md), step 4). |
-| 3 | The gated branch only for keys outside the window | Gated branch | Short prompts: no double weight inside the window | A new option. Claim A of [document 15](15-attention-math-side-by-side.md) gives the form. | As step 2 |
+| 2 | `window_rope` in the setup of Run 1 ([experiment](experiments/window-rope.md)). **Done on 2026-10-10:** loss 1.229, PIQA 61.5 (+3.9), ARC-Easy 43.3 (+4.3). At positions 0–127, the mix of the branches now gives most of the error. | Window | Positions 0–127, thus PIQA and ARC-Easy. Layer 0. | None, the option exists ([document 13](13-lizard-attention-v2.md)). The model config exists. | One stage 1: approximately 50 minutes and $5 on the H200 (bf16). Or a few layers on the A10 ([faster feedback loop](experiments/fast-feedback-loop.md), step 4). |
+| 3 | The gated branch only for keys outside the window | Gated branch | Short prompts: no double weight inside the window. After step 2, the best weight of the gated branch at positions 0–127 is 0.08 ([experiment](experiments/window-rope.md), finding 6). | A new option. Claim A of [document 15](15-attention-math-side-by-side.md) gives the form. | As step 2 |
 | 4 | A larger weight for the loss of positions 0–127, or a part of the data in shorter chunks | Loss | The case of PIQA and ARC-Easy | A new option in the trainer | As step 2 |
 | 5 | `gate_per_head` | Gated branch | Layer 15 (34% of the MSE difference) | None, the option exists | As step 2 |
 | 6 | A map for each head with an identity start, or a loss on the attention weights as in Hedgehog | Hedgehog | Long sequences, MMLU | A new option | As step 2 |

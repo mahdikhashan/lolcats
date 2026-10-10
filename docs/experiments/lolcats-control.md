@@ -157,7 +157,7 @@ In all three evaluations, the 48 expected tensors (16 layers × 3) loaded with t
 |---|---|---|---|
 | Stage 1 validation loss | 3.2549 | **0.4442** | −86% (7.3× lower) |
 | PIQA | 57.6 ± 1.2 | **73.5 ± 1.0** | +15.9 points, z ≈ 10 |
-| ARC-Easy | Not measured | **62.8 ± 1.0** (normalized 58.0) | – |
+| ARC-Easy | 39.0 ± 1.0 (normalized 37.8), measured on 2026-10-10 ([RoPE in the window branch](window-rope.md)) | **62.8 ± 1.0** (normalized 58.0) | +23.8 points, z ≈ 17 |
 | MMLU subset | 22.5 ± 2.5 | 26.0 ± 2.6 | +3.5 points, z ≈ 1.0 |
 | "A" / "B" / "C" / "D" on MMLU | 95.4% / 2.8% / 1.8% / 0.0% | 19.3% / 14.7% / 42.8% / 23.2% | – |
 | Letter mass, confidence, entropy | 0.018, 0.586, 1.550 bits ([temperature](temperature.md)) | 0.962, 0.450, 1.746 bits | – |

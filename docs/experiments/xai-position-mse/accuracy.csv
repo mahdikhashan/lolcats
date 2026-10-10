@@ -1,10 +1,11 @@
 label,piqa,arc_easy,source
 "fd32, LoLCATs recipe, bf16",,,feature-dimension.md (not evaluated on PIQA or ARC-Easy)
-"fd128, LoLCATs recipe, bf16",57.6,,stage-difference.md (ARC-Easy not evaluated)
+"fd128, LoLCATs recipe, bf16",57.6,39.0,stage-difference.md (PIQA); window-rope.md (ARC-Easy)
 "fd32, paper recipe, bf16",55.8,34.1,paper-lr.md
 "fd32, paper recipe, float32",57.7,35.7,float32.md
 "Second round, config 1",57.3,36.5,second-round.md
 "Second round, config 2 (clipping)",57.5,35.6,gradient-clipping.md
 "v2, C1: alpha per head",57.5,34.6,13-lizard-attention-v2.md
 "v2, R1b: per-head, hybrid",55.9,29.9,13-lizard-attention-v2.md
+"v2, window_rope, fd128, LoLCATs recipe, bf16",61.5,43.3,window-rope.md
 LoLCATs attention,73.5,62.8,lolcats-control.md

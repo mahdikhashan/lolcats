@@ -1,6 +1,6 @@
 # Experiment (XAI): MSE by token position
 
-**Status:** Run 1 finished on 2026-10-09: all 9 stage 1 checkpoints. LoLCATs computes the teacher attention at positions 0–127. Lizard misses 35–63% of the teacher output there, most of all in layers 2 and 3. But the MSE of these positions does not predict PIQA or ARC-Easy over the Lizard checkpoints. The hypothesis of X1 does not hold.
+**Status:** Run 1 finished on 2026-10-09: all 9 stage 1 checkpoints. LoLCATs computes the teacher attention at positions 0–127. Lizard misses 35–63% of the teacher output there, most of all in layers 2 and 3. But the MSE of these positions does not predict PIQA or ARC-Easy over the Lizard checkpoints. The hypothesis of X1 does not hold. Run 2 on 2026-10-10 added `window_rope` and the ARC-Easy of Lizard Run 1. `window_rope` has the lowest MSE at positions 0–127 and the highest accuracy of the Lizard checkpoints. The rank test still gives no significant result.
 
 ## Question
 
@@ -50,16 +50,17 @@ This is X1 of [document 20](../20-layer-mse-for-piqa-arc.md). In which query pos
 | Checkpoint (label) | PIQA | ARC-Easy | Source |
 |---|---|---|---|
 | fd32, LoLCATs recipe, bf16 | – | – | [Feature dimension](feature-dimension.md) |
-| fd128, LoLCATs recipe, bf16 (Lizard Run 1) | 57.6 | – | [Stage difference](stage-difference.md) |
+| fd128, LoLCATs recipe, bf16 (Lizard Run 1) | 57.6 | 39.0 | [Stage difference](stage-difference.md) (PIQA), [RoPE in the window branch](window-rope.md) (ARC-Easy) |
 | fd32, paper recipe, bf16 | 55.8 | 34.1 | [Paper LR](paper-lr.md) |
 | fd32, paper recipe, float32 | 57.7 | 35.7 | [float32](float32.md) |
 | Second round, config 1 | 57.3 | 36.5 | [Second round](second-round.md) |
 | Second round, config 2 (clipping) | 57.5 | 35.6 | [Gradient clipping](gradient-clipping.md) |
 | v2, C1: alpha per head | 57.5 | 34.6 | [Document 13](../13-lizard-attention-v2.md) |
 | v2, R1b: per-head, hybrid | 55.9 | 29.9 | [Document 13](../13-lizard-attention-v2.md) |
+| v2, window_rope, fd128, LoLCATs recipe, bf16 | 61.5 | 43.3 | [RoPE in the window branch](window-rope.md) |
 | LoLCATs attention | 73.5 | 62.8 | [LoLCATs control](lolcats-control.md) |
 
-Three values are not measured. Two evaluations on the A10 complete the table ("How to run").
+Two values are not measured: fd32 with the LoLCATs recipe. Run 1 used 9 checkpoints, without the ARC-Easy of Lizard Run 1. Run 2 added this value and the `window_rope` row.
 
 ## Predictions
 
@@ -226,6 +227,35 @@ With LoLCATs ([`rank_all.md`](xai-position-mse/rank_all.md)), all scores give ρ
 - **Screen:** prediction 3 does not hold. Thus the accuracy stays the screen for new stage 1 runs. The position buckets still show where a change acts.
 - **First change:** prediction 2 holds, and the largest error at positions 0–127 is in layers 2 and 3. This supports `window_rope` as the first change (step 2 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5).
 - **Check for `window_rope`:** the relative MSE of positions 0–127 must decrease clearly in layers 0–3. Finding 6 says that a small decrease is not sufficient. Only an evaluation on PIQA and ARC-Easy can show an effect on the accuracy.
+
+### Run 2: `window_rope` and the ARC-Easy of Lizard Run 1 (2026-10-10)
+
+- **Commands:** the evaluation block of [RoPE in the window branch](window-rope.md) on `student06` (one A10, lolcats `02b4ce9`). It ran `position_mse.py compute` for `window_rope`, and ARC-Easy for Lizard Run 1. Then `rank` ran on a CPU with the 10 JSON files and the new accuracy table.
+- **Checks:** all 80 expected keys loaded. The buckets add up to the MSE over all positions, with a relative difference of 3.6e-8. The loss differs from the stored loss by +0.16%.
+- **Files in [`xai-position-mse/`](xai-position-mse/):** [`v2_window_rope.json`](xai-position-mse/v2_window_rope.json), and `rank_all_run2` and `rank_lizard_run2` (each as `.md` and `.png`). The files of Run 1 stay unchanged. The heatmap against Lizard Run 1 is in [RoPE in the window branch](window-rope.md), "Plots".
+
+| Checkpoint | Loss 0–127 | Loss 128–511 | Loss 512–2047 | Stage 1 loss | Relative 0–127 | Relative 128–511 | Relative 512–2047 |
+|---|---|---|---|---|---|---|---|
+| v2, window_rope, fd128, LoLCATs recipe, bf16 | 2.548 | 1.250 | 1.116 | 1.231 | 0.321 | 0.168 | 0.141 |
+
+Rank correlations without LoLCATs ([`rank_lizard_run2.md`](xai-position-mse/rank_lizard_run2.md)):
+
+| Score | PIQA ρ | PIQA p | PIQA n | ARC-Easy ρ | ARC-Easy p | ARC-Easy n |
+|---|---|---|---|---|---|---|
+| Positions 0–127 | −0.49 | 0.22 | 8 | −0.26 | 0.54 | 8 |
+| Positions 128–511 | −0.40 | 0.33 | 8 | −0.31 | 0.46 | 8 |
+| Positions 512–2047 | −0.49 | 0.22 | 8 | −0.45 | 0.27 | 8 |
+| All positions (stage 1 loss) | −0.40 | 0.33 | 8 | −0.31 | 0.46 | 8 |
+
+With LoLCATs ([`rank_all_run2.md`](xai-position-mse/rank_all_run2.md)), n is 9. The scores give ρ = −0.58 to −0.64 for PIQA (p = 0.068–0.11), and −0.48 to −0.62 for ARC-Easy (p = 0.086–0.19).
+
+![PIQA and ARC-Easy against the loss of each bucket, without LoLCATs, Run 2](xai-position-mse/rank_lizard_run2.png)
+
+**Finding 7: `window_rope` has the lowest error at positions 0–127 of all Lizard checkpoints, and the highest accuracy**. Its relative MSE there is 0.321, against 0.351–0.629 for the 8 earlier Lizard checkpoints. Its PIQA (61.5) and ARC-Easy (43.3) are the highest of the Lizard checkpoints. The ARC-Easy of Lizard Run 1 is 39.0, the highest of the 7 earlier checkpoints with an ARC-Easy score.
+
+**Finding 8: the rank test still gives no significant result**. Without LoLCATs, all ρ values are now negative, but no p is below 0.22. The score of positions 0–127 is not better than the score of positions 512–2047. One checkpoint, `window_rope`, has the lowest loss in all buckets and the highest accuracy. It gives most of the change against Run 1. Thus prediction 3 still does not hold.
+
+**Finding 9: in `window_rope`, short positions have the largest error**. Positions 0–127 have 1.9× and 2.3× the relative MSE of the other two buckets. From Run 1, the error of positions 0–127 decreased by 31%, and that of the other buckets by 59%. Layers 2 and 3 still have the largest error at positions 0–127 (0.593 and 0.538). Layer 0 has 0.154 there (Run 1: 0.383). Thus the check for `window_rope` holds for layers 0 and 1, but only a little for layers 2 and 3. The branch decomposition shows the cause: the mix of the branches ([RoPE in the window branch](window-rope.md), findings 6 to 8).
 
 ## Decision rules
 

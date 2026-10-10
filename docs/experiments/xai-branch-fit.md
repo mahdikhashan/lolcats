@@ -1,6 +1,6 @@
 # Experiment (XAI): branch decomposition
 
-**Status:** Run 1 finished on 2026-10-09: the 8 Lizard stage 1 checkpoints. Inside the window, the window branch without RoPE explains only approximately 60% of the teacher output. A window with RoPE would halve the error of the current branches, and 4–7 times in layers 0 and 15. The gated branch carries the long-range part, but with too much weight. This supports `window_rope` as the next change.
+**Status:** Run 1 finished on 2026-10-09: the 8 Lizard stage 1 checkpoints. Inside the window, the window branch without RoPE explains only approximately 60% of the teacher output. A window with RoPE would halve the error of the current branches, and 4–7 times in layers 0 and 15. The gated branch carries the long-range part, but with too much weight. This supports `window_rope` as the next change. Run 2 on 2026-10-10 added the `window_rope` checkpoint. Its window branch gives almost the teacher output at positions 0–127. There, the mix of the branches now gives most of the error. The best weight of the gated branch is 0.08 at positions 0–127 and 0.79 at positions 512–2047.
 
 ## Question
 
@@ -181,6 +181,33 @@ In the bf16 run of the recipe of the paper, α stayed at 1.0 ([paper LR](paper-l
 - **Gated branch (rule 2):** the gated branch lowers the error of WR by 36–60% at positions 128–2047. Thus it is not the main limit, and X3 can wait.
 - **Mixing gap (rule 3):** the gated branch should have less weight (finding 7). `gla_norm: hybrid` corrects this weight (R1b: 0.98). Thus a second run can combine `window_rope` with `hybrid`, after a run with `window_rope` alone.
 - **Expected effect of `window_rope`:** layers 0 and 15 probably improve most. Heads 14 and 23 of layer 15 probably improve much (findings 5 and 6). The gated branch then trains together with a window with RoPE, so the result can differ from G+WR. X1 found that a small decrease of the MSE does not predict the accuracy. Thus only PIQA and ARC-Easy can show the effect on the accuracy.
+
+### Run 2: `window_rope` (2026-10-10)
+
+- **Commands:** `branch_fit.py compute --from_json` and `plot` for the buckets 0–127 and all, in the evaluation block of [RoPE in the window branch](window-rope.md). Machine: `student06`, one A10, lolcats `02b4ce9`. Data: all 16 validation batches.
+- **Checks:** all 80 expected keys loaded. The branches reproduce the checkpoint output with 1.7e-3 (bf16 rounding).
+- **Files:** [`xai-branch-fit/v2_window_rope.json`](xai-branch-fit/v2_window_rope.json). The heatmaps against Lizard Run 1 are in [RoPE in the window branch](window-rope.md), "Plots".
+- **W in this checkpoint** is the window branch with RoPE and the 4 sinks, without α. WR is the same window without the sinks.
+
+| Checkpoint | W, 0–127 | G+W, 0–127 | trained, 0–127 | WR, 512–2047 | G+WR, 512–2047 | G+W, all | G+WR, all | trained, all |
+|---|---|---|---|---|---|---|---|---|
+| fd128, LoLCATs recipe, bf16 (Run 1, for comparison) | 0.403 | 0.314 | 0.463 | 0.352 | 0.142 | 0.328 | 0.158 | 0.363 |
+| v2, window_rope, fd128, LoLCATs recipe, bf16 | 0.048 | 0.025 | 0.321 | 0.352 | 0.144 | 0.116 | 0.159 | 0.159 |
+
+Median weight of G in the G+W fit (the median over the layers of the median over the heads):
+
+| Checkpoint | 0–127 | 128–511 | 512–2047 | All positions |
+|---|---|---|---|---|
+| fd128, LoLCATs recipe, bf16 (Run 1) | 0.42 | 0.76 | 0.84 | 0.81 |
+| v2, window_rope, fd128, LoLCATs recipe, bf16 | 0.08 | 0.65 | 0.79 | 0.75 |
+
+**Finding 9: with RoPE, the window branch gives almost the teacher output at positions 0–127**. W alone keeps 0.048 there (Run 1: 0.403). Layers 2–15 have 0.007–0.038. Layers 0 and 1 have 0.117 and 0.293. W and WR differ only in the sinks, so the sinks cause this rest.
+
+**Finding 10: at positions 0–127, the mixing gap is now the largest part of the error**. The trained output has 13× the error of the G+W fit there (0.321 against 0.025), and 3–89× in the single layers. In Run 1, the factor was 1.1–1.9 (finding 8 gives the factors over all positions). Over all positions, the trained output has 37% more error than the G+W fit (Run 1: 11%).
+
+**Finding 11: the best weight of the gated branch increases with the position**. Its median is 0.08 at positions 0–127 and 0.79 at positions 512–2047. Run 1 has the same pattern, from 0.42 to 0.84. With `gla_norm: row`, G keeps the weight 1 at each position. Thus finding 7 is mostly a problem of short positions. To correct this, G needs a weight that changes with the position, for example with the shared denominator of `hybrid`. Another way to correct it is a gated branch only for keys outside the window (step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5).
+
+**Finding 12: heads 14 and 23 of layer 15 are no longer the main source of the loss**. Their MSE is 13.7× and 11.3× lower than in Run 1 ([RoPE in the window branch](window-rope.md), finding 4). This agrees with finding 6.
 
 ## Decision rules
 
