@@ -239,7 +239,7 @@ Relative MSE: the MSE divided by the mean square of the teacher output. Branch f
 #### Decision
 
 - **Rule 1 applies.** PIQA and ARC-Easy increase by more than 2 SE. Thus RoPE in the window is a real gain.
-- **Next: `window_rope` with `gla_norm: hybrid`**, as the rule says. Findings 6 and 7 support this run. With the shared denominator, the share of G can change with the position. The sum of the gated weights grows with all keys, but the window sum stops at 128 keys. It is not known whether the training sets a small share of G at short positions. In R1b, `hybrid` turned the window almost off (α 0.01–0.07, from the start value 0.1).
+- **Next: `window_rope` with `gla_norm: hybrid`** ([experiment](window-rope-hybrid.md)), as the rule says. Findings 6 and 7 support this run. With the shared denominator, the share of G can change with the position. The sum of the gated weights grows with all keys, but the window sum stops at 128 keys. It is not known whether the training sets a small share of G at short positions. In R1b, `hybrid` turned the window almost off (α 0.01–0.07, from the start value 0.1).
 - **If the error at positions 0–127 stays high:** step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5. The gated branch then gets only the keys outside the window. With `hybrid`, a prompt shorter than the window then gets only the window and the sinks.
 - **Stage 2** waits for the better of these configs.
 - **Thesis:** report this run as an extension, not as the reproduction.

@@ -1,0 +1,41 @@
+name: llama-1b
+# Lizard attention v2 (src/model/linear_attention/lizard_attention_v2.py, docs/13-lizard-attention-v2.md)
+# Experiment docs/experiments/window-rope-hybrid.md: the window_rope config
+# (distill_llama3_2_1b_lizard_v2_w128_fd128_m4_windowrope.yaml) with ONE change, the shared denominator
+# gla_norm: hybrid, together with its LoLCATs start value alpha_init: 0.1 (as in run R1b, docs/13). With
+# alpha_init 1.0, the gated branch would start with almost no weight (docs/13, P6).
+model:
+  pretrained_model_name_or_path: "meta-llama/Llama-3.2-1B"
+  cache_dir: "/workspace/lolcats/scratch/"   # CHANGE this
+  return_dict: true
+  device_map: auto
+  low_cpu_mem_usage: true
+  torch_dtype: bfloat16
+  rope_theta: 500000.0                      # Llama 3.2 uses 500K theta (NOT 10000 like Mistral)
+  attn_implementation: flash_attention_2
+
+attention:
+  attention_type: lolcats_llama_lizard_v2
+
+  # As in Run 1 (v1) and window_rope
+  feature_dim: 128                          # dimension of xW; phi(x) has 2 x feature_dim features (D4)
+  window_size: 128
+  num_meta: 4                               # sink logits t_j enter the window denominator as exp(t_j) (D5)
+
+  # v2 options
+  gla_norm: hybrid              # THE CHANGE of this config: one denominator for both branches and the sinks (LoLCATs)
+  alpha_per_head: false         # C1: one alpha for each head (LoLCATs default)
+  alpha_init: 0.1               # start value of alpha: the LoLCATs window factor, as in R1b (window_rope: 1.0)
+  train_alpha: true             # false: alpha stays at alpha_init (the paper lists only phi, W_gamma and t as learnable)
+  feature_map_per_head: false   # C2 / D2: one Hedgehog map for each head (LoLCATs default)
+  feature_activation: softmax   # D3: softmax (Table 13, v1) | exp (Section 4)
+  gate_per_head: false          # C4: one gate for each head (the paper uses one gate for all heads)
+  gate_bias_init: null          # C6: a bias in W_gamma with this start value, e.g. 3.0 (gamma ~ 0.95)
+  window_rope: true             # C5: RoPE in the window branch only (as in window_rope)
+
+  # Which layers stay softmax (none — fully linearize)
+  softmax_attentions: []
+
+  # Train all attention layers
+  train_attention: true
+  remove_base_attn: true                    # Free original softmax weights after distill
