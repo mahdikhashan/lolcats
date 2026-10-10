@@ -1,6 +1,6 @@
 # Experiment: `window_rope` with the shared denominator (`gla_norm: hybrid`)
 
-**Status:** A plan from 2026-10-10. The model config exists and passed CPU tests. Stage 1 has not run yet.
+**Status:** Stage 1 finished on 2026-10-10. Validation loss 1.6172 (`window_rope`: 1.2290). PIQA 58.9 (`window_rope`: 61.5), ARC-Easy 36.0 (`window_rope`: 43.3), MMLU subset 25.3. Thus `hybrid` does not help in this setup. The gate closed in 9 of 16 layers, and these layers lost the long range. In the 7 layers with an open gate, the MSE decreased at all positions ("Results", findings 3 to 6).
 
 ## Question
 
@@ -153,12 +153,114 @@ CPU, 2026-10-10.
 | `pytest tests/test_lizard_attention_v2.py` | 60 passed. They include `hybrid` against the loop reference and the decode form (checks 2 and 3). They also include the gated share at the start values (check 10) and \|α\| (check 11). |
 | The share of the gated branch for α = 1.0, from the share for α = 0.1 | One layer of the test model, window 32, 128 positions, the same feature maps. The formula $r / (r + \alpha)$ gives the share for α = 1.0 from the share for α = 0.1. The largest difference is 4.4e-16. |
 | Training of a tiny copy of the config (3 layers, window 16, feature dimension 8). The real stage 1 recipe, sequences of 1024 tokens, 8 steps. | The validation loss decreased at each evaluation: 4444, 4271, 4141. α increased from 0.1 to 0.157–0.158 in the 3 layers. The checkpoint has 15 Lizard tensors (3 layers × 5). It loads with 0 missing and 0 unexpected keys, and `layer_mse.py` reproduces its stored loss. `branch_fit.py` reproduces the output of the checkpoint with a relative error of 8.0e-8. |
+| Check after the run (2026-10-10): the eval path of lm-eval | A tiny `LolcatsLlamaForCausalLM` (2 layers, window 8, 40 tokens) with the `row` config of `window_rope` and with this config. Random, open (γ ≈ 1) and closed (γ ≈ 0) gates, float32 and bf16. `use_cache=True` gives the same logits as `use_cache=False` (difference 0). Decoding token by token in bf16 differs by up to 1.4e-3 with `hybrid` (0 with `row`). lm-eval does not use this path. |
 
 The values of the tiny model do not predict the values at 1B. After the training, `distill_llama.py` stopped with the known error of the tiny tokenizer in the sample generation (`token_type_ids`, [RoPE in the window branch](window-rope.md), "Tests").
 
 ## Results
 
-Not run yet.
+### Run 1: stage 1 and evaluation (2026-10-10)
+
+- **Training:** HF Jobs, the command of "How to run". This document does not have the validation losses of the job log. The checkpoint holds step 1100.
+- **Evaluation:** `student06`, one A10, lolcats `84228c5`. The commands are the block of "How to run", section 3. The XAI scripts used all 16 validation batches (32,768 tokens).
+- **Checks:**
+  1. In each evaluation, all 80 expected Lizard tensors loaded. 0 missing, 0 unexpected.
+  2. `layer_mse.py` gives the loss 1.6194, against the stored loss 1.6172 (+0.14%).
+  3. The position buckets add up to the MSE over all positions, with a relative difference of 5.0e-8.
+  4. The branches reproduce the checkpoint output with a relative error of 1.7e-3 (bf16 rounding).
+  5. lm-eval uses the model with `use_cache=True`. In a tiny model with this config, this path gives the same logits as the training path. This holds in float32 and in bf16, with an open, a closed and a random gate. Thus the scores evaluate the trained model ("Tests").
+- **Files in [`window-rope-hybrid/`](window-rope-hybrid/):** the [evaluation summary](window-rope-hybrid/stages.md) and its lm-eval CSV file. The folder also has the plots with their tables. The JSON files are `v2_window_rope_hybrid.json` in the folders of the three XAI documents.
+
+#### Scores
+
+z values with unpaired SEs.
+
+| Measure | `window_rope` | `window_rope` + `hybrid` | Difference | LoLCATs attention |
+|---|---|---|---|---|
+| Stage 1 validation loss | **1.2290** | 1.6172 | +32% | 0.4442 |
+| PIQA | **61.5 ± 1.1** | 58.9 ± 1.1 | −2.6 points, z ≈ −1.6 | 73.5 |
+| PIQA, normalized | 58.8 ± 1.1 | 58.5 ± 1.1 | −0.3 points | – |
+| ARC-Easy | **43.3 ± 1.0** | 36.0 ± 1.0 | −7.3 points, z ≈ −5.1 | 62.8 |
+| ARC-Easy, normalized | 41.0 ± 1.0 | 35.3 ± 1.0 | −5.7 points | 58.0 |
+| MMLU subset | 24.6 ± 2.5 | 25.3 ± 2.6 | +0.7 points | 26.0 |
+| "A" / "B" / "C" / "D" on MMLU | 40.0% / 20.4% / 16.5% / 23.2% | 26.3% / 11.9% / 27.0% / 34.7% | – | 19.3% / 14.7% / 42.8% / 23.2% |
+| Letter mass, confidence, entropy | 0.498, 0.743, 0.963 bits | 0.743, 0.472, 1.706 bits | – | 0.962, 0.450, 1.746 bits |
+
+#### Lizard parameters
+
+From the gate table of the evaluation summary. The table uses one 5-shot MMLU prompt of 2048 tokens.
+
+| Group | Layers | Gate γ | α | Gated weight kept after 512 tokens |
+|---|---|---|---|---|
+| Open gate | 0, 1, 6, 7, 9, 14, 15 | Above 0.999 for 95.6–100% of the tokens | 0.022–0.151 | 0.94–1.0 |
+| Closed gate | 2, 3, 4, 5, 8, 10, 11, 12, 13 | Below 0.001 for 99.2–100% of the tokens | 0.111–0.215 | 0 |
+
+In `window_rope`, the gate of layers 1–15 stayed above 0.999 for 99.9–100% of the tokens.
+
+#### Plots
+
+![Layer-wise MSE of window_rope with hybrid against window_rope](window-rope-hybrid/layer_mse_vs_window_rope.png)
+
+![Layer-wise relative MSE of window_rope with hybrid against window_rope](window-rope-hybrid/layer_mse_vs_window_rope_relative.png)
+
+![Relative MSE of each layer and position bucket, window_rope and window_rope with hybrid](window-rope-hybrid/position_heatmap.png)
+
+![Branch decomposition at positions 0–127, window_rope and window_rope with hybrid](window-rope-hybrid/branch_fit_0-127.png)
+
+![Branch decomposition over all positions, window_rope and window_rope with hybrid](window-rope-hybrid/branch_fit_all.png)
+
+#### Means over the layers
+
+Relative MSE: the MSE divided by the mean square of the teacher output. Branch fits: the remaining error divided by ‖y‖², with the best weights for each head.
+
+| Measure | `window_rope` | `window_rope` + `hybrid` |
+|---|---|---|
+| Relative MSE, positions 0–127 | 0.321 | 0.222 |
+| Relative MSE, positions 128–511 | 0.168 | 0.188 |
+| Relative MSE, positions 512–2047 | 0.141 | 0.273 |
+| Open-gate layers: relative MSE 0–127 / 128–511 / 512–2047 | 0.235 / 0.132 / 0.120 | 0.133 / 0.082 / 0.070 |
+| Closed-gate layers: relative MSE 0–127 / 128–511 / 512–2047 | 0.388 / 0.195 / 0.158 | 0.292 / 0.270 / 0.430 |
+| Trained output against the best G+W mix, positions 0–127 | 13× | 3.0× |
+| Trained output against the best G+W mix, all positions | +37% | +31% |
+
+#### Findings
+
+**Finding 1: `hybrid` lowers ARC-Easy clearly and PIQA a little**. ARC-Easy falls by 7.3 points (z ≈ −5.1), and PIQA by 2.6 points (z ≈ −1.6). The stage 1 loss increases by 32%, from 1.229 to 1.617.
+
+**Finding 2: on MMLU, the answers are spread over the four letters, but the accuracy stays at chance**. The share of "A" falls to 26.3%. The letter mass (0.743) and the entropy (1.706 bits) come near the values of LoLCATs (0.962 and 1.746 bits). The accuracy is 25.3%.
+
+**Finding 3: the gate splits the layers into two groups**. In 7 layers, the gate stays open, as in `window_rope`. In the other 9 layers, the gate closes: γ is below 0.001 for almost all tokens. Then the gated branch keeps only the current token. Such a layer is a window attention with sinks, plus a term for the current token. In the closed-gate layers, α increased from 0.1 to 0.111–0.215. In the open-gate layers, α is 0.022–0.151.
+
+**Finding 4: where the gate stays open, `hybrid` lowers the MSE at all positions**. In the 7 open-gate layers, the MSE is 0.17–0.90× that of `window_rope`. The relative MSE decreases in all three buckets, for example from 0.120 to 0.070 at positions 512–2047. Layer 0 has 5.8× less MSE than in `window_rope`, and only 1.7× that of LoLCATs.
+
+**Finding 5: where the gate closes, the layer loses the long range**. In the 9 closed-gate layers, the MSE is 1.8–2.7× that of `window_rope`. These layers give 78% of the loss. Their relative MSE at positions 512–2047 increases from 0.158 to 0.430, and in layer 2 from 0.223 to 1.033. In the branch decomposition over all positions, G alone keeps an error of 0.82–0.99 in these layers. G+W has 0.85–0.99× the error of W alone. Thus the gated branch adds almost nothing there.
+
+**Finding 6: the closed gates explain the higher loss**. With the MSE of `window_rope` in the 9 closed-gate layers, and the MSE of this run in the 7 open-gate layers, the loss would be 0.98. This is below 1.229.
+
+**Finding 7: the error at short positions decreases, but the accuracy falls**. At positions 0–127, the relative MSE decreases from 0.321 to 0.222. It is lower in 15 of 16 layers. But PIQA and ARC-Easy fall (finding 1). This is the second case against the hypothesis of X1 ([XAI: MSE by token position](xai-position-mse.md), findings 6 and 10). Two possible reasons, both not tested:
+
+- In stage 1 and in the XAI scripts, each layer gets the teacher input. In a benchmark, each layer gets the output of the student layers before it, so the errors add up over the layers.
+- The MSE comes from packed Alpaca sequences, not from PIQA and ARC-Easy prompts.
+
+**Finding 8: the mix of the branches at short positions improves, but it is not the best mix**. At positions 0–127, the trained output has 3.0× the error of the best G+W mix (`window_rope`: 13×). Over all positions, the best weights would give an estimated loss of 1.31, against 1.62.
+
+#### Check of the predictions
+
+| Prediction | Result | Holds |
+|---|---|---|
+| 1. Stage 1 loss below 1.229 | 1.6172 (finding 1) | No |
+| 2. The relative MSE of positions 0–127 decreases clearly from 0.321, probably below 0.2. Positions 0–127 are no longer the bucket with the largest error. | 0.222. Positions 512–2047 now have the largest error (0.273). | Partly |
+| 3. At positions 0–127, the trained output has less than 3× the error of the best G+W mix | 3.0× (2.98×) | Yes, by a small margin |
+| 4. α above 0.1 in most layers | Above 0.1 in 10 of 16 layers. The 6 layers below 0.1 are open-gate layers. | Yes |
+| 5. PIQA and ARC-Easy increase over `window_rope` | PIQA −2.6, ARC-Easy −7.3 | No |
+
+#### Decision
+
+- **The rule "the loss stays above 1.229" applies.** `hybrid` does not help in this setup. `window_rope` with `row` stays the best config.
+- **The shared denominator itself is not refuted.** Where the gate stayed open, `hybrid` lowered the MSE at all positions (finding 4). The problem is the gate that closes (findings 5 and 6). A possible cause: with `hybrid`, the gated sum grows when the gate is open. Thus a closed gate is a direct way to lower the share of the gated branch. This is a hypothesis.
+- **Step 3 of [document 20](../20-layer-mse-for-piqa-arc.md) needs a design first.** It gives the gated branch only the keys outside the window. With `row`, the gated branch gets the weight 1 also when only one key is outside the window. With `hybrid`, the gate can close, as in this run.
+- **Next run: stage 2 of `window_rope`** ([RoPE in the window branch](window-rope.md)). It is the best stage 1, and it needs no code. `make hf-job-finetune` runs stage 2 alone from the stage 1 checkpoint on the Hub. The target ran for Run 2 (v1), but not with a v2 config yet.
+- **A test of the gate hypothesis, optional:** `window_rope` with `hybrid` and `gate_bias_init: 3.0`, so the gate starts at approximately 0.95. It is a change in the config only. The gate can still close in the training.
 
 ## Decision rules
 

@@ -106,7 +106,7 @@ Done already:
 | 5 | `gate_per_head` | Gated branch | Layer 15 (34% of the MSE difference) | None, the option exists | As step 2 |
 | 6 | A map for each head with an identity start, or a loss on the attention weights as in Hedgehog | Hedgehog | Long sequences, MMLU | A new option | As step 2 |
 
-- Use steps 2 and 3 with the shared denominator (`gla_norm: hybrid`). Then a prompt shorter than the window gets the teacher weights, multiplied by the window share ρ. The sinks get the rest. If the sinks get almost no weight, the output is the teacher output. LoLCATs has this property, and it is the probable cause of its PIQA score (finding 2 of the control).
+- Use steps 2 and 3 with the shared denominator (`gla_norm: hybrid`). Then a prompt shorter than the window gets the teacher weights, multiplied by the window share ρ. The sinks get the rest. If the sinks get almost no weight, the output is the teacher output. LoLCATs has this property, and it is the probable cause of its PIQA score (finding 2 of the control). **Result (2026-10-10):** step 2 with `hybrid` lowered PIQA and ARC-Easy. The gate closed in 9 of 16 layers ([experiment](experiments/window-rope-hybrid.md)). Thus step 3 needs a design that keeps the gate open.
 - Steps 2 and 3 move Lizard toward LoLCATs and Liger. Thus the thesis must report them as extensions, not as the reproduction ([document 19](19-next-steps-from-literature.md), part B).
 - Change one part for each run. Evaluate each run on PIQA and ARC-Easy, not only on the MSE ([document 16](16-optuna-plan.md), section 1).
 

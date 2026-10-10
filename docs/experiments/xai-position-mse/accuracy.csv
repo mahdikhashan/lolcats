@@ -8,4 +8,5 @@ label,piqa,arc_easy,source
 "v2, C1: alpha per head",57.5,34.6,13-lizard-attention-v2.md
 "v2, R1b: per-head, hybrid",55.9,29.9,13-lizard-attention-v2.md
 "v2, window_rope, fd128, LoLCATs recipe, bf16",61.5,43.3,window-rope.md
+"v2, window_rope, hybrid, fd128, LoLCATs recipe, bf16",58.9,36.0,window-rope-hybrid.md
 LoLCATs attention,73.5,62.8,lolcats-control.md
