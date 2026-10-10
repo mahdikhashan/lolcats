@@ -2,12 +2,14 @@
 # Find where the gap starts (docs/11-gap-analysis.md, section 10). Evaluates
 #   A. the teacher, B. Lizard after stage 1 (no LoRA), C. Lizard after stage 2
 # on the MMLU subset (5-shot, 5 questions per subject), PIQA and ARC-Easy (0-shot),
+# and on request on all MMLU questions, ARC-Challenge, HellaSwag and WinoGrande (0-shot, as in Table 9 of the Lizard paper),
 # on any machine with an NVIDIA GPU and conda (same setup as eval.sh)
 # -> One-time setup: CONDA_OVERRIDE_CUDA=12.4 conda env create -f environment.yaml
 # -> conda activate lolcats-env
 # -> export HF_TOKEN=<token with access to HF_REPO and meta-llama/Llama-3.2-1B>
 # -> scripts/compare_stages.sh                                    # 3 models x 3 tasks
 # -> MODELS="stage1 stage2" TASKS=piqa scripts/compare_stages.sh   # a part of it (TASKS can also include mmlu, all questions)
+# -> MODELS="teacher stage2" TASKS="arc_challenge hellaswag winogrande" scripts/compare_stages.sh  # the other Table 9 tasks
 # -> TEMPERATURE=0.5 scripts/compare_stages.sh                    # logits divided by 0.5 (see scripts/temperature.sh)
 # -> MODELS=stage1 TASKS=layers scripts/compare_stages.sh          # no benchmark: only the checkpoint check and the
 #    per-layer table (Lizard gates or LoLCATs window share), in a few minutes
@@ -121,8 +123,11 @@ for model in $MODELS; do
       mmlu)        TASK_ARGS=(--task hendrycksTest --num_shots 5) ;;
       piqa)        TASK_ARGS=(--task piqa --num_shots 0) ;;
       arc_easy)    TASK_ARGS=(--task arc_easy --num_shots 0) ;;
+      arc_challenge) TASK_ARGS=(--task arc_challenge --num_shots 0) ;;  # the paper reports acc_norm
+      hellaswag)   TASK_ARGS=(--task hellaswag --num_shots 0) ;;       # the paper reports acc_norm
+      winogrande)  TASK_ARGS=(--task winogrande --num_shots 0) ;;      # acc only
       layers)      TASK_ARGS=(); COMMAND=layers ;;  # the harness stops after the model load
-      *) echo "Unknown task $task (use mmlu_subset, mmlu, piqa, arc_easy, layers)"; exit 1 ;;
+      *) echo "Unknown task $task (use mmlu_subset, mmlu, piqa, arc_easy, arc_challenge, hellaswag, winogrande, layers)"; exit 1 ;;
     esac
     if [ "$COMMAND" = layers ] && [ "$model" = teacher ]; then
       echo "-> Skipping layers for the teacher: it has no Lizard or LoLCATs layers"; continue

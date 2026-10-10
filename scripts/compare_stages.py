@@ -44,6 +44,9 @@ TASKS = {
     'mmlu': 'MMLU, all questions (5-shot)',
     'piqa': 'PIQA (0-shot)',
     'arc_easy': 'ARC-Easy (0-shot)',
+    'arc_challenge': 'ARC-Challenge (0-shot)',
+    'hellaswag': 'HellaSwag (0-shot)',
+    'winogrande': 'WinoGrande (0-shot)',
 }
 LIZARD_PARAMS = ('phi_q.weight', 'phi_k.weight', 'W_gamma.weight', 'W_gamma.bias', 'meta_tokens', 'alpha_blend')
 LOLCATS_PARAMS = ('feature_map_q.mlp.layer', 'feature_map_k.mlp.layer', 'window_factors')  # lolcats_llama_window_tk
