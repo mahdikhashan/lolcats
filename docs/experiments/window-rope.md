@@ -1,6 +1,6 @@
 # Experiment: RoPE in the window branch (`window_rope`)
 
-**Status:** Stage 1 finished on 2026-10-10. Validation loss 1.2290 (Run 1: 3.2549). PIQA 61.5 (Run 1: 57.6), ARC-Easy 43.3 (Run 1: 39.0), MMLU subset 24.6 (Run 1: 22.5). All six predictions hold. At positions 0–127, the window branch now gives almost the teacher output. There, most of the error comes from the mix of the two branches. The gated branch keeps the weight 1, but its best weight there is 0.08 ("Results", findings 6 and 7).
+**Status:** Stage 1 and stage 2 finished on 2026-10-10. After stage 2: PIQA 73.1 and ARC-Easy 63.8, against 68.0 and 54.8 for Run 2 of Lizard Run 1. MMLU subset 25.6 ("Results", Run 2). After stage 1: validation loss 1.2290 (Run 1: 3.2549). PIQA 61.5 (Run 1: 57.6), ARC-Easy 43.3 (Run 1: 39.0), MMLU subset 24.6 (Run 1: 22.5). All six predictions hold. At positions 0–127, the window branch now gives almost the teacher output. There, most of the error comes from the mix of the two branches. The gated branch keeps the weight 1, but its best weight there is 0.08 ("Results", findings 6 and 7).
 
 ## Question
 
@@ -243,6 +243,65 @@ Relative MSE: the MSE divided by the mean square of the teacher output. Branch f
 - **If the error at positions 0–127 stays high:** step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), section 5. The gated branch then gets only the keys outside the window. With `hybrid`, a prompt shorter than the window then gets only the window and the sinks.
 - **Stage 2** waits for the better of these configs.
 - **Thesis:** report this run as an extension, not as the reproduction.
+
+### Run 2: stage 2 (2026-10-10)
+
+- **Training:** `make hf-job-finetune`, from the stage 1 checkpoint of Run 1. This is the first run of this target with a v2 config ([`window_rope` with the shared denominator](window-rope-hybrid.md), "Decision").
+- **What stage 2 trains:** only the LoRA weights of q, k, v and o (128 tensors, 1,703,936 parameters). The Lizard parameters keep their stage 1 values. α and the sink logits are equal in the two evaluation summaries. The gates differ a little, because LoRA changes the hidden states.
+- **Evaluation:** `student06`, one A10, lolcats `84228c5`, `MODELS=stage2`.
+- **Checks:** in each evaluation, all 80 stage 1 tensors and all 128 stage 2 tensors loaded. 0 missing, 0 unexpected. The stored step of the stage 2 checkpoint (1100) is the best step.
+- **Files in [`window-rope/`](window-rope/):** the [evaluation summary](window-rope/stages_stage2.md), its lm-eval CSV file, and the validation losses of stage 2 (`stage2_training.csv`).
+
+#### Validation loss during stage 2
+
+The causal language-model loss on the Alpaca validation data.
+
+| Step | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 1000 | 1100 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `window_rope` | 1.3432 | 1.2961 | 1.2792 | 1.2661 | 1.2575 | 1.2533 | 1.2482 | 1.2433 | 1.2413 | 1.2372 | **1.2352** |
+
+Stage 2 of Lizard Run 1 (Run 2) started at 3.516 and ended at 2.252 ([stage difference](stage-difference.md)). Thus the final perplexity, exp(loss), is approximately 3.44 here, against approximately 9.5 for Run 2.
+
+#### Scores
+
+All values come from the same harness. z values with unpaired SEs. Run 2 is the model of [document 7](../07-results.md): the stage 1 checkpoint of Lizard Run 1 and the stage 2 checkpoint of Run 2.
+
+| Measure | Run 2, after stage 2 | `window_rope`, stage 1 | `window_rope`, after stage 2 | Difference to Run 2 | LoLCATs attention, stage 1 |
+|---|---|---|---|---|---|
+| PIQA | 67.95 ± 1.09 | 61.5 ± 1.1 | **73.1 ± 1.0** | +5.1 points, z ≈ 3.4 | 73.5 |
+| PIQA, normalized | 66.6 | 58.8 | 72.5 | +5.9 points | – |
+| ARC-Easy | 54.8 ± 1.0 | 43.3 ± 1.0 | **63.8 ± 1.0** | +9.0 points, z ≈ 6.3 | 62.8 |
+| ARC-Easy, normalized | 50.1 | 41.0 | 56.9 | +6.9 points | 58.0 |
+| MMLU subset | 24.9 ± 2.6 | 24.6 ± 2.5 | 25.6 ± 2.6 | +0.7 points | 26.0 |
+| "A" / "B" / "C" / "D" on MMLU | 98.6% / 1.1% / 0.4% / 0.0% | 40.0% / 20.4% / 16.5% / 23.2% | 41.4% / 37.5% / 20.7% / 0.4% | – | 19.3% / 14.7% / 42.8% / 23.2% |
+| Letter mass, confidence, entropy | – | 0.498, 0.743, 0.963 bits | 0.980, 0.348, 1.908 bits | – | 0.962, 0.450, 1.746 bits |
+
+The teacher gets 33.7 on the MMLU subset in this harness ([document 7](../07-results.md)). Its PIQA and ARC-Easy in this harness are not measured yet.
+
+Values of the papers, from another version of the harness ([document 7](../07-results.md), Table 9 of the Lizard paper):
+
+| Task | Lizard 1B | LoLCATs 1B | Teacher 1B |
+|---|---|---|---|
+| PIQA | 74.8 | 74.6 | 74.1 |
+| ARC-Easy | 65.6 | 63.0 | 65.4 |
+
+#### Findings of Run 2
+
+**Finding 10: after stage 2, `window_rope` is the best Lizard model of this project**. PIQA is 73.1 and ARC-Easy is 63.8. Against Run 2, PIQA increases by 5.1 points (z ≈ 3.4), and ARC-Easy by 9.0 points (z ≈ 6.3).
+
+**Finding 11: the gain of stage 1 stays after stage 2, and it increases**. After stage 1, `window_rope` had +3.9 points on PIQA and +4.3 points on ARC-Easy against Lizard Run 1 (finding 1). After stage 2, the differences are +5.1 and +9.0. Stage 2 adds 11.6 points on PIQA and 20.5 points on ARC-Easy. For Lizard Run 1, stage 2 added 10.4 and 15.8 points.
+
+**Finding 12: PIQA and ARC-Easy come near the values of the papers, but these values come from another harness**. PIQA is 1.7 points below Lizard 1B of the paper (74.8), and ARC-Easy is 1.8 points below (65.6). ARC-Easy is above LoLCATs 1B of the paper (63.0). The paper used a newer version of the harness. Thus only the teacher in this harness can give the real gap. In this harness, the LoLCATs attention after stage 1 has 73.5 and 62.8.
+
+**Finding 13: the stage 2 loss is much lower than in Run 2**. The final validation loss is 1.235, against 2.252 for Run 2. The loss still decreased at the last evaluation (by 0.002 after step 1000).
+
+**Finding 14: MMLU stays at chance**. The accuracy is 25.6%, and the teacher has 33.7%. The "A" collapse of Run 2 (98.6% "A") is gone, and the four letters get 98.0% of the probability. But the probability is spread almost evenly over "A", "B" and "C" (confidence 0.348, entropy 1.908 bits), and "D" gets 0.4% of the answers. Thus the model gives the answer format, but it does not find the right answer. The 5-shot MMLU prompts are long (up to 2048 tokens). Thus MMLU probably depends more on the part of the attention outside the window than PIQA and ARC-Easy do. This is a hypothesis.
+
+#### Decision of Run 2
+
+- **Report:** `window_rope` after stage 2 is the best Lizard model of this project. It is an extension, not the reproduction ([document 19](../19-next-steps-from-literature.md), part B).
+- **Next, in minutes on the A10:** the teacher on PIQA and ARC-Easy in this harness (X0 of [gap analysis 2](../12-gap-analysis-2.md)). The command is `MODELS=teacher TASKS="piqa arc_easy" scripts/compare_stages.sh`. It gives the real gap to the teacher.
+- **The remaining gap is MMLU** (25.6 against 33.7 for the teacher). Changes to the part outside the window, such as the gated branch and step 3 of [document 20](../20-layer-mse-for-piqa-arc.md), target this gap. Their effect must be checked on MMLU, not only on PIQA and ARC-Easy.
 
 ## Decision rules
 
