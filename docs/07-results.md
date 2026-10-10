@@ -18,6 +18,8 @@ The standard errors (SE) are binomial, `sqrt(p (1 − p) / n)`, as the harness r
 
 The paper values come from its Table 9. The paper used a newer harness version. Thus the exact gap needs an evaluation of the teacher in this harness ([document 10](10-open-issues-and-next-steps.md)).
 
+**Update (2026-10-10).** A later model with RoPE in the window branch gives PIQA 73.1 and ARC-Easy 63.8 after stage 2. Section 6 compares it with the Lizard model of this document.
+
 ## 1. MMLU subset (`--limit 5`)
 
 The MMLU subset has 5 questions from each of the 57 subjects. The harness shuffles each subject with a fixed seed (42) before it applies the limit. Thus both models received exactly the same questions.
@@ -93,6 +95,20 @@ The paper reports the accuracy (`acc`) for both tasks.
 - This method measures how much the trained model depends on each branch. It does not measure if the architecture needs the branch.
   - The paper (Table 6) trains a new model without the branch.
   - In that ablation, MMLU of the 8B model decreases from 61.2 to 39.7 without the window branch, and to 42.2 without the gate.
+
+## 6. Update: `window_rope` after stage 2 (2026-10-10)
+
+The Lizard attention v2 with RoPE in the window branch (`window_rope`), after stage 1 and stage 2. The harness, the tasks and the questions are the same as above. [RoPE in the window branch](experiments/window-rope.md), Run 2, gives all details.
+
+| Task | Lizard model (this document) | `window_rope` after stage 2 | Difference | Paper: Lizard 1B |
+|---|---|---|---|---|
+| MMLU subset (285 questions) | 24.9 | 25.6 | +0.7 points | – |
+| PIQA (accuracy) | 67.95 ± 1.09 | **73.1 ± 1.0** | +5.1 points, z ≈ 3.4 | 74.8 |
+| ARC-Easy (accuracy) | 54.8 ± 1.0 | **63.8 ± 1.0** | +9.0 points, z ≈ 6.3 | 65.6 |
+| Stage 2 validation loss | 2.252 | 1.235 | – | – |
+
+- The "A" collapse on MMLU is gone ("A" for 41.4% of the questions). But the MMLU subset stays at chance, and the teacher has 33.7.
+- The paper values come from a newer harness. The teacher in this harness on PIQA and ARC-Easy is still not measured.
 
 ## Interpretation so far
 

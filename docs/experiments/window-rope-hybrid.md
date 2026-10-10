@@ -259,7 +259,7 @@ Relative MSE: the MSE divided by the mean square of the teacher output. Branch f
 - **The rule "the loss stays above 1.229" applies.** `hybrid` does not help in this setup. `window_rope` with `row` stays the best config.
 - **The shared denominator itself is not refuted.** Where the gate stayed open, `hybrid` lowered the MSE at all positions (finding 4). The problem is the gate that closes (findings 5 and 6). A possible cause: with `hybrid`, the gated sum grows when the gate is open. Thus a closed gate is a direct way to lower the share of the gated branch. This is a hypothesis.
 - **Step 3 of [document 20](../20-layer-mse-for-piqa-arc.md) needs a design first.** It gives the gated branch only the keys outside the window. With `row`, the gated branch gets the weight 1 also when only one key is outside the window. With `hybrid`, the gate can close, as in this run.
-- **Next run: stage 2 of `window_rope`** ([RoPE in the window branch](window-rope.md)). It is the best stage 1, and it needs no code. `make hf-job-finetune` runs stage 2 alone from the stage 1 checkpoint on the Hub. The target ran for Run 2 (v1), but not with a v2 config yet.
+- **Next run: stage 2 of `window_rope`** ([RoPE in the window branch](window-rope.md)). It is the best stage 1, and it needs no code. **Done on 2026-10-10:** PIQA 73.1, ARC-Easy 63.8 ([RoPE in the window branch](window-rope.md), Run 2). `make hf-job-finetune` runs stage 2 alone from the stage 1 checkpoint on the Hub. The target ran for Run 2 (v1), but not with a v2 config yet.
 - **A test of the gate hypothesis, optional:** `window_rope` with `hybrid` and `gate_bias_init: 3.0`, so the gate starts at approximately 0.95. It is a change in the config only. The gate can still close in the training.
 
 ## Decision rules
