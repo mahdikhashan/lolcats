@@ -424,7 +424,7 @@ def get_args():
     c.add_argument('--checkpoint', default=None, help='Stage 1 checkpoint, or `init`. Default: the name of '
                                                       'distill_llama.py for the configs')
     c.add_argument('--finetune_checkpoint', default=None, help='Stage 2 checkpoint (default: as compare_stages.sh)')
-    c.add_argument('--hf_repo', default=os.environ.get('HF_REPO', 'nanoman1/lolcats-lizard-llama-3.2-1b'))
+    c.add_argument('--hf_repo', default=os.environ.get('HF_REPO', 'nanoman1/Llama-3.2-1B-Lizard'))
     c.add_argument('--label', default=None, help='Name of this result in the plots')
     c.add_argument('--layers', type=int, nargs='+', default=None,
                    help='Layers of the crops (default: 0, 1/4, 1/2, 3/4 and the last layer)')

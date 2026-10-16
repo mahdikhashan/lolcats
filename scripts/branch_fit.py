@@ -277,7 +277,7 @@ def get_args():
     c.add_argument('--finetune_config', default='finetune_lora_qkvo_alpaca_clean_1b',
                    help='Only for the default checkpoint name')
     c.add_argument('--checkpoint', default=None, help='Stage 1 checkpoint, or `init` (see scripts/layer_mse.py)')
-    c.add_argument('--hf_repo', default=os.environ.get('HF_REPO', 'nanoman1/lolcats-lizard-llama-3.2-1b'))
+    c.add_argument('--hf_repo', default=os.environ.get('HF_REPO', 'nanoman1/Llama-3.2-1B-Lizard'))
     c.add_argument('--label', default=None, help=LABEL_HELP)
     c.add_argument('--edges', default=[0, 128, 512, 2048], type=lambda s: [int(x) for x in s.split(',')],
                    help='Bucket edges in query positions, comma-separated (default: 0,128,512,2048)')

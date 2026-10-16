@@ -160,6 +160,6 @@ All these pull requests merged into `main` of `mahdikhashan/lolcats`.
 - Code: `mahdikhashan/lolcats`, branch `main`. The thesis reference code is in `mahdikhashan/jku-thesis`.
 - Scripts for evaluation and debugging: `scripts/`. [scripts/README.md](../scripts/README.md) lists them with their documents.
 - Docker image: `mahdikhashan/lolcats` on Docker Hub.
-- Checkpoints: the private Hugging Face repository `nanoman1/lolcats-lizard-llama-3.2-1b`.
+- Checkpoints: the public Hugging Face repository [`nanoman1/Llama-3.2-1B-Lizard`](https://huggingface.co/nanoman1/Llama-3.2-1B-Lizard). Its old name was `nanoman1/lolcats-lizard-llama-3.2-1b`.
 - W&B: entity `nano-apps`, project `lolcats-personal`. The W&B run of Run 1 is `zyt5syvy`.
 - Teacher: `meta-llama/Llama-3.2-1B`.

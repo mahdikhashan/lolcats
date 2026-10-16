@@ -20,7 +20,7 @@ Accuracy in %. MMLU uses all 14,042 questions, 5-shot.
 
 #### Reproduce the thesis
 
-All runs use seed 0. The checkpoints are in the private Hugging Face repository `nanoman1/lolcats-lizard-llama-3.2-1b`. The notes do not record the lolcats commit of the training runs.
+All runs use seed 0. The checkpoints are public in the Hugging Face repository [`nanoman1/Llama-3.2-1B-Lizard`](https://huggingface.co/nanoman1/Llama-3.2-1B-Lizard), with a model card. During the work, its name was `nanoman1/lolcats-lizard-llama-3.2-1b`. The notes do not record the lolcats commit of the training runs.
 
 | Result | Model config | Stage 1 / stage 2 config | Expected PIQA / ARC-Easy / MMLU | Eval commit |
 | - | - | - | - | - |
@@ -60,6 +60,7 @@ The commands of all other runs are in Appendix E of the [thesis](https://github.
 
 #### Documentation
 
+- [Checkpoints on the Hugging Face Hub](https://huggingface.co/nanoman1/Llama-3.2-1B-Lizard)
 - [Project notes](./docs/README.md)
 - [Results](./docs/07-results.md)
 - [Hyperparameters](./docs/hyperparameters.md)

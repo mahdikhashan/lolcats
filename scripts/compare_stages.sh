@@ -20,7 +20,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-HF_REPO=${HF_REPO:-nanoman1/lolcats-lizard-llama-3.2-1b}
+HF_REPO=${HF_REPO:-nanoman1/Llama-3.2-1B-Lizard}
 MODEL_CONFIG=${MODEL_CONFIG:-distill_llama3_2_1b_lizard_w128_fd128_m4}
 DISTILL_CONFIG=${DISTILL_CONFIG:-distill_alpaca_clean_xent0_mse1000_lr1e-2_1b}
 FINETUNE_CONFIG=${FINETUNE_CONFIG:-finetune_lora_qkvo_alpaca_clean_1b}
