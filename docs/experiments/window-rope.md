@@ -428,7 +428,23 @@ The teacher ran on 2026-10-12 ("Teacher on the Table 9 tasks" below).
 
 On ARC-Challenge and WinoGrande, the difference is not clear. On HellaSwag, the gap of 3.0 points is clear (|z| ≥ 2). HellaSwag is the only short task where `window_rope` is clearly below the teacher.
 
-**Next:** the paired tests of these differences from the per-question files (issue 34 of mahdikhashan/jku-thesis-drafts).
+### Paired tests against the teacher (2026-10-12)
+
+- **Command:** `scripts/paired_tests.py` on `student06`, CPU only. It read the per-question files of these run directories:
+  - `window_rope`, stage 2: `results/window_rope_stage2/stages/stage2` (PIQA, ARC-Easy) and `results/table9_stage2/stage2` (ARC-Challenge, HellaSwag, WinoGrande)
+  - teacher: `results/teacher_x0/teacher` (PIQA, ARC-Easy) and `results/table9/teacher/teacher` (ARC-Challenge, HellaSwag, WinoGrande)
+- **Method:** McNemar's exact test on the questions that only one model answers right, and the paired SE. Also a paired bootstrap 95% interval (10,000 samples, seed 0) and the Holm correction over the five tasks.
+- **File:** [`window-rope/paired_window_rope_vs_teacher.md`](window-rope/paired_window_rope_vs_teacher.md).
+
+| Task (metric) | n | `window_rope` | Teacher | Difference | Paired SE | z | Only `window_rope` / only teacher | McNemar p | Holm p | 95% bootstrap |
+|---|---|---|---|---|---|---|---|---|---|---|
+| PIQA (acc) | 1,838 | 73.1 | 74.4 | −1.4 | 0.70 | −1.9 | 71 / 96 | 0.063 | 0.24 | [−2.7, +0.0] |
+| ARC-Easy (acc) | 2,376 | 63.8 | 65.3 | −1.5 | 0.78 | −1.9 | 155 / 191 | 0.06 | 0.24 | [−3.0, +0.0] |
+| ARC-Challenge (acc_norm) | 1,172 | 36.1 | 36.3 | −0.3 | 1.17 | −0.2 | 92 / 95 | 0.88 | 1 | [−2.6, +2.0] |
+| HellaSwag (acc_norm) | 10,042 | 60.7 | 63.7 | −3.0 | 0.31 | −9.7 | 336 / 637 | 3.1e-22 | 1.6e-21 | [−3.6, −2.4] |
+| WinoGrande (acc) | 1,267 | 59.6 | 60.1 | −0.6 | 1.47 | −0.4 | 169 / 176 | 0.75 | 1 | [−3.3, +2.4] |
+
+**Finding 26: the paired tests keep the conclusions of the X0 comparison and of finding 25, but PIQA and ARC-Easy come near the limit**. The paired SE is about two thirds of the unpaired SE on PIQA and ARC-Easy, so z changes from about −1 to −1.9. The McNemar p-values are 0.063 and 0.06, and the upper ends of the bootstrap intervals are at +0.0. After the Holm correction, both p-values are 0.24, so the differences are not clear. On ARC-Challenge and WinoGrande, the differences stay small and not clear. On HellaSwag, the gap of 3.0 points is clear (z ≈ −9.7, Holm p 1.6e-21).
 
 ## Decision rules
 

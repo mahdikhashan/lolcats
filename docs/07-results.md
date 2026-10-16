@@ -112,7 +112,7 @@ The Lizard attention v2 with RoPE in the window branch (`window_rope`), after st
 | Stage 2 validation loss | 2.252 | 1.235 | – | – | – |
 
 - The "A" collapse on MMLU is gone ("A" for 41.4% of the questions). On all MMLU questions, `window_rope` gets 27.2, above chance, and the teacher 31.7. The student keeps a third of the part of the teacher above chance ([RoPE in the window branch](experiments/window-rope.md), findings 15–21).
-- On PIQA and ARC-Easy, `window_rope` gets 98.2% and 97.7% of the teacher in this harness. The differences are −1.4 points (z ≈ −0.9) and −1.5 points (z ≈ −1.1), with unpaired SEs.
+- On PIQA and ARC-Easy, `window_rope` gets 98.2% and 97.7% of the teacher in this harness. The differences are −1.4 points and −1.5 points. With paired tests, z ≈ −1.9 for both, McNemar p 0.063 and 0.06, and Holm p 0.24. Thus the differences are not clear, but they are near the limit ([RoPE in the window branch](experiments/window-rope.md), finding 26).
 - The teacher in this harness gets 36.3 on ARC-Challenge, 63.7 on HellaSwag and 60.1 on WinoGrande (2026-10-12), within 0.1 points of the paper. Against this teacher, `window_rope` is 0.2 points below on ARC-Challenge (z ≈ −0.1) and 0.5 points below on WinoGrande (z ≈ −0.3). On HellaSwag, it is 3.0 points below (z ≈ −4.4). Only the HellaSwag gap is clear ([RoPE in the window branch](experiments/window-rope.md), findings 22–25).
 
 ## Interpretation so far
